@@ -1,2 +1,2 @@
-# Meva (Math Evaluator)
+* Meva (Math Evaluator)
 A simple calculator written on C.
