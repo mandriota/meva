@@ -155,24 +155,25 @@ struct Lexer {
   } tk_opt;
 };
 
-int64_t lx_read_integer(struct Lexer *lx, int64_t * mnt, int64_t * exp) {
+int64_t lx_read_integer(struct Lexer *lx, int64_t *mnt, int64_t *exp) {
   *mnt = 0;
   *exp = 0;
-  
+
   int64_t pow10 = 1;
 
-  const int64_t limit = (((uint64_t) 1 << (sizeof(pow10)*8 - 1)) - 1) / 10;
+  const int64_t limit = (((uint64_t)1 << (sizeof(pow10) * 8 - 1)) - 1) / 10;
 
   bool overflow = false;
 
   char cc;
   while (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
          IS_DIGIT((cc = lx->rd.page.str.data[lx->rd.ptr]))) {
-	if (!overflow) {
-	  *mnt = *mnt * 10 + cc - '0';
-	  pow10 *= 10;
-	  overflow = pow10 > limit;
-	} else ++*exp; // TODO: add warning that right part of integer were ignored
+    if (!overflow) {
+      *mnt = *mnt * 10 + cc - '0';
+      pow10 *= 10;
+      overflow = pow10 > limit;
+    } else
+      ++*exp; // TODO: add warning that right part of integer were ignored
 
     rd_next_char(&lx->rd);
   }
@@ -184,11 +185,11 @@ enum TokenType lx_next_token_number(struct Lexer *lx) {
   enum TokenType tt = TT_FLT;
 
   lx->rd.mrk = lx->rd.ptr;
-  
+
   int64_t mnt, exp;
   lx_read_integer(lx, &mnt, &exp);
 
-  lx->tk_opt.n_flt = (long double) mnt * powl(10, exp);	
+  lx->tk_opt.n_flt = (long double)mnt * powl(10, exp);
 
   char cc;
   if (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
@@ -196,10 +197,10 @@ enum TokenType lx_next_token_number(struct Lexer *lx) {
 
     rd_next_char(&lx->rd);
     int64_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
-    lx->tk_opt.n_flt += (long double) mnt / decimal_log10;
+    lx->tk_opt.n_flt += (long double)mnt / decimal_log10;
   } else if (exp == 0) {
-	tt = TT_INT;
-	lx->tk_opt.n_int = mnt;
+    tt = TT_INT;
+    lx->tk_opt.n_int = mnt;
   }
 
   rd_prev(&lx->rd);
@@ -309,7 +310,8 @@ int main() {
 
   fprintf(fs, "something=e^(pi*i)/12346789987654321123456789");
 
-  printf("1000000000000.1234567 = %0.15Lf\n", (long double) 1000000000000.1234567);
+  printf("1000000000000.1234567 = %0.15Lf\n",
+         (long double)1000000000000.1234567);
 
   fclose(fs);
 
