@@ -10,28 +10,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-/*** NAMING CONVENTION ***
-**************************
-         CONSTANTS, ENUMS, DEFINES
-         :: ALL CAPS, SNAKE CASE
-         STRUCTS
-         :: TITLE, CAMEL CASE
-         FUNCTIONS, LOCAL VARIABLES
-         :: ALL SCRIPT, SNAKE CASE
-         METHODS
-         :: SAME AS FUNCTIONS
-         :: FIRST WORD IS AN ABBREVIATION OF STRUCT NAME
-
-         STRUCTS NAMES ABBREVIATIONS LIST
-         | Reader      | RD |
-                 | Token       | TK |
-                 | TokenType   | TT |
-                 | Lexer       | LX |
-                 | NodeType    | NT |
-         | Parser      | PR |
-         | Interpreter | IR |
-*************************/
-
 /*** UTILS ***/
 
 #define IS_WHITESPACE(c)                                                       \
