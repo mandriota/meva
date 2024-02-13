@@ -4,12 +4,11 @@ A simple calculator written on C.
 ** Status
 - Currently in development.
 
-*** TODO
-- [-] Lexer
-- [ ] Parser
-- [ ] Evaluator/Interpreter
-- [-] Simple numerical expressions support
-- [ ] Algebric expressions support
+*** TODO Lexer
+*** TODO Parser
+*** TODO Evaluator/Interpreter
+*** TODO Simple numerical expressions support
+*** TODO Algebric expressions support
 
 ** Naming Conventions
 *** Constants, Enums, Defines
