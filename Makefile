@@ -1,5 +1,8 @@
+CC := gcc
+CFLAGS :=
+
 run: build
 	./main
 
-build:
+build: main.c
 	gcc -o main main.c
