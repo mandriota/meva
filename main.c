@@ -91,8 +91,8 @@ enum TokenType {
 
   TT_POW,
 
-  TT_LPN,
-  TT_RPN,
+  TT_LP,
+  TT_RP,
 
   TT_EOX,
 };
@@ -111,8 +111,8 @@ const char *tt_stringify(enum TokenType tt) {
     STRINGIFY_CASE(TT_QUO)
     STRINGIFY_CASE(TT_MOD)
     STRINGIFY_CASE(TT_POW)
-    STRINGIFY_CASE(TT_LPN)
-    STRINGIFY_CASE(TT_RPN)
+    STRINGIFY_CASE(TT_LP)
+    STRINGIFY_CASE(TT_RP)
     STRINGIFY_CASE(TT_EOX)
   }
 
@@ -265,9 +265,9 @@ enum TokenType lx_next_token(struct Lexer *lx) {
   case '^':
     return lx->tt = TT_POW;
   case '(':
-    return lx->tt = TT_LPN;
+    return lx->tt = TT_LP;
   case ')':
-    return lx->tt = TT_RPN;
+    return lx->tt = TT_RP;
   case ';':
     return lx->tt = TT_EOX;
   }
@@ -406,11 +406,11 @@ void pr_next_primitive_node(struct Parser *pr, struct Node *node) {
     node->as.pm.n_flt = pr->lx.tk_opt.pv.n_flt;
     lx_next_token(&pr->lx);
     break;
-  case TT_LPN:
+  case TT_LP:
     lx_next_token(&pr->lx);
 	pr_next_mul_quo_mod_node(pr, node);
     break;
-  case TT_RPN:
+  case TT_RP:
 	lx_next_token(&pr->lx);
     break;
   case TT_EOX:
@@ -461,7 +461,7 @@ void pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node) {
   } else
     *node = *node_a;
 
-  if (pr->lx.tt == TT_RPN) lx_next_token(&pr->lx);
+  if (pr->lx.tt == TT_RP) lx_next_token(&pr->lx);
 };
 
 /************************************ IRPR ************************************/
