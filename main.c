@@ -40,6 +40,13 @@
   case name:                                                                   \
     return STRINGIFY(name);
 
+#define TRY(prefix, expr)                                                      \
+  {                                                                            \
+    enum prefix err = expr;                                                    \
+    if (err != prefix##_NOERROR)                                               \
+      return err;                                                              \
+  }
+
 struct String {
   char *data;
   size_t len;
@@ -65,15 +72,10 @@ union Primitive {
   int64_t n_int;
 };
 
-struct IdentNode {
-
-  u_int64_t v;
-};
-
 /************************************ LEXR ************************************/
 
 enum TokenType {
-  TT_ERR = -1,
+  TT_ILL = -1,
   TT_EOS,
 
   TT_SYM,
@@ -91,15 +93,15 @@ enum TokenType {
 
   TT_POW,
 
-  TT_LP,
-  TT_RP,
+  TT_LP0,
+  TT_RP0,
 
   TT_EOX,
 };
 
 const char *tt_stringify(enum TokenType tt) {
   switch (tt) {
-    STRINGIFY_CASE(TT_ERR)
+    STRINGIFY_CASE(TT_ILL)
     STRINGIFY_CASE(TT_EOS)
     STRINGIFY_CASE(TT_SYM)
     STRINGIFY_CASE(TT_INT)
@@ -111,13 +113,13 @@ const char *tt_stringify(enum TokenType tt) {
     STRINGIFY_CASE(TT_QUO)
     STRINGIFY_CASE(TT_MOD)
     STRINGIFY_CASE(TT_POW)
-    STRINGIFY_CASE(TT_LP)
-    STRINGIFY_CASE(TT_RP)
+    STRINGIFY_CASE(TT_LP0)
+    STRINGIFY_CASE(TT_RP0)
     STRINGIFY_CASE(TT_EOX)
   }
 
   return STRINGIFY(INVALID_TT);
-};
+}
 
 struct Reader {
   struct StringBuffer page;
@@ -138,6 +140,10 @@ void rd_prev(struct Reader *restrict rd) {
 void rd_next_page(struct Reader *restrict rd) {
   rd->ptr = 0;
   rd->page.str.len = fread(rd->page.str.data, 1, rd->page.cap, rd->src);
+  if (ferror(rd->src)) {
+    perror("cannot read file");
+    exit(2);
+  }
   rd->eof = rd->page.str.len < rd->page.cap;
 }
 
@@ -201,8 +207,8 @@ int64_t lx_read_integer(struct Lexer *lx, int64_t *mnt, int64_t *exp) {
   return pow10;
 }
 
-enum TokenType lx_next_token_number(struct Lexer *lx) {
-  enum TokenType tt = TT_FLT;
+void lx_next_token_number(struct Lexer *lx) {
+  lx->tt = TT_FLT;
 
   int64_t mnt, exp;
   lx_read_integer(lx, &mnt, &exp);
@@ -217,19 +223,23 @@ enum TokenType lx_next_token_number(struct Lexer *lx) {
     int64_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
     lx->tk_opt.pv.n_flt += (long double)mnt / decimal_log10;
   } else if (exp == 0) {
-    tt = TT_INT;
+    lx->tt = TT_INT;
     lx->tk_opt.pv.n_int = mnt;
   }
 
   rd_prev(&lx->rd);
-
-  return tt;
 }
 
 void lx_read_symbol(struct Lexer *lx) {
+  lx->tt = TT_SYM;
+
   lx->tk_opt.sb.cap = 64;
   lx->tk_opt.sb.str.len = 0;
   lx->tk_opt.sb.str.data = malloc(lx->tk_opt.sb.cap);
+  if (lx->tk_opt.sb.str.data == NULL) {
+    perror("cannot allocate memory");
+    exit(3);
+  }
 
   char cc;
   while (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
@@ -241,9 +251,11 @@ void lx_read_symbol(struct Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-enum TokenType lx_next_token(struct Lexer *lx) {
-  if (lx->rd.eos || lx->rd.eof && lx->rd.page.str.len == 0)
-    return TT_EOS;
+void lx_next_token(struct Lexer *lx) {
+  if (lx->rd.eos || (lx->rd.eof && lx->rd.page.str.len == 0)) {
+    lx->tt = TT_EOS;
+    return;
+  }
 
   rd_next_char(&lx->rd);
   rd_skip_whitespaces(&lx->rd);
@@ -251,37 +263,48 @@ enum TokenType lx_next_token(struct Lexer *lx) {
   char cc = lx->rd.page.str.data[lx->rd.ptr];
   switch (cc) {
   case '=':
-    return lx->tt = TT_LET;
+    lx->tt = TT_LET;
+    return;
   case '+':
-    return lx->tt = TT_ADD;
+    lx->tt = TT_ADD;
+    return;
   case '-':
-    return lx->tt = TT_SUB;
+    lx->tt = TT_SUB;
+    return;
   case '*':
-    return lx->tt = TT_MUL;
+    lx->tt = TT_MUL;
+    return;
   case '/':
-    return lx->tt = TT_QUO;
+    lx->tt = TT_QUO;
+    return;
   case '%':
-    return lx->tt = TT_MOD;
+    lx->tt = TT_MOD;
+    return;
   case '^':
-    return lx->tt = TT_POW;
+    lx->tt = TT_POW;
+    return;
   case '(':
-    return lx->tt = TT_LP;
+    lx->tt = TT_LP0;
+    return;
   case ')':
-    return lx->tt = TT_RP;
+    lx->tt = TT_RP0;
+    return;
   case ';':
-    return lx->tt = TT_EOX;
+    lx->tt = TT_EOX;
+    return;
+  case '\0':
+    lx->tt = TT_EOS;
+    return;
   }
 
   lx->rd.ptr = lx->rd.ptr;
 
-  if (IS_DIGIT(cc)) {
-    return lx->tt = lx_next_token_number(lx);
-  } else if (IS_LETTER(cc)) {
+  if (IS_DIGIT(cc))
+    lx_next_token_number(lx);
+  else if (IS_LETTER(cc))
     lx_read_symbol(lx);
-    return lx->tt = TT_SYM;
-  }
-
-  return lx->tt = TT_ERR;
+  else
+    lx->tt = TT_ILL;
 }
 
 /************************************ PRSR ************************************/
@@ -321,7 +344,7 @@ const char *nt_stringify(enum NodeType nt) {
   }
 
   return STRINGIFY(INVALID_NT);
-};
+}
 
 struct Node;
 
@@ -379,18 +402,48 @@ void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
 
 struct Parser {
   struct Lexer lx;
+
+  int64_t p0c;
 };
 
-void pr_next_pow_node(struct Parser *pr, struct Node *node);
+enum PR_ERR {
+  PR_ERR_NOERROR,
+  PR_ERR_GENERAL,
+  PR_ERR_PAREN_NOT_OPENED,
+  PR_ERR_PAREN_NOT_CLOSED,
+  PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED,
+  PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED,
+  PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED,
+  PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED,
+  PR_ERR_TOKEN_UNEXPECTED,
+};
 
-void pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node);
+const char *pr_err_stringify(enum PR_ERR pr_err) {
+  switch (pr_err) {
+    STRINGIFY_CASE(PR_ERR_NOERROR)
+    STRINGIFY_CASE(PR_ERR_GENERAL)
+    STRINGIFY_CASE(PR_ERR_PAREN_NOT_OPENED)
+    STRINGIFY_CASE(PR_ERR_PAREN_NOT_CLOSED)
+    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED)
+    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED)
+    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED)
+    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED)
+    STRINGIFY_CASE(PR_ERR_TOKEN_UNEXPECTED)
+  }
 
-void pr_next_primitive_node(struct Parser *pr, struct Node *node) {
+  return STRINGIFY(INVALID_PR_ERR);
+}
+
+enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node *node);
+
+enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node);
+
+enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node *node) {
   switch (pr->lx.tt) {
-  case TT_ERR:
-    break;
+  case TT_ILL:
+    return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
   case TT_EOS:
-    break;
+    return PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED;
   case TT_SYM:
     node->type = NT_PRIM_SYM;
     node->as.pm.str = pr->lx.tk_opt.pv.str;
@@ -406,26 +459,25 @@ void pr_next_primitive_node(struct Parser *pr, struct Node *node) {
     node->as.pm.n_flt = pr->lx.tk_opt.pv.n_flt;
     lx_next_token(&pr->lx);
     break;
-  case TT_LP:
+  case TT_LP0:
+    ++pr->p0c;
     lx_next_token(&pr->lx);
-	pr_next_mul_quo_mod_node(pr, node);
-    break;
-  case TT_RP:
-	lx_next_token(&pr->lx);
-    break;
+    return pr_next_mul_quo_mod_node(pr, node);
+  case TT_RP0:
+    return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
   case TT_EOX:
-    break;
+    return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
   default:
-	break;
+    return PR_ERR_TOKEN_UNEXPECTED;
   }
+
+  return PR_ERR_NOERROR;
 }
 
-void pr_next_pow_node(struct Parser *pr, struct Node *node) {
+enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node *node) {
   struct Node *node_a = (struct Node *)malloc(sizeof(struct Node)), *node_b;
 
-  pr_next_primitive_node(pr, node_a);
-
-  printf("%s\n", tt_stringify(pr->lx.tt));
+  TRY(PR_ERR, pr_next_primitive_node(pr, node_a));
 
   if (pr->lx.tt == TT_POW) {
     node_b = (struct Node *)malloc(sizeof(struct Node));
@@ -435,20 +487,19 @@ void pr_next_pow_node(struct Parser *pr, struct Node *node) {
 
     lx_next_token(&pr->lx);
 
-    pr_next_pow_node(pr, node_b); // least priority node
+    TRY(PR_ERR, pr_next_pow_node(pr, node_b));
   } else
     *node = *node_a;
-};
 
-void pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node) {
+  return PR_ERR_NOERROR;
+}
+
+enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node) {
   struct Node *node_a = (struct Node *)malloc(sizeof(struct Node)), *node_b,
               *node_p = node;
-  pr_next_pow_node(pr, node_a);
+  TRY(PR_ERR, pr_next_pow_node(pr, node_a));
 
-  printf("%s\n", tt_stringify(pr->lx.tt));
-
-  if (pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO ||
-      pr->lx.tt == TT_MOD) {
+  if (pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO || pr->lx.tt == TT_MOD) {
     node_b = (struct Node *)malloc(sizeof(struct Node));
     node_p->type = NT_BIOP_MUL * (pr->lx.tt == TT_MUL) +
                    NT_BIOP_QUO * (pr->lx.tt == TT_QUO) +
@@ -457,24 +508,34 @@ void pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node) {
     node_p->as.bp.b = node_b;
 
     lx_next_token(&pr->lx);
-    pr_next_mul_quo_mod_node(pr, node_b); // least priority node
+    TRY(PR_ERR, pr_next_mul_quo_mod_node(pr, node_b)); // least priority node
   } else
     *node = *node_a;
 
-  if (pr->lx.tt == TT_RP) lx_next_token(&pr->lx);
-};
+  if (pr->lx.tt == TT_RP0) {
+    if (--pr->p0c >= 0)
+      lx_next_token(&pr->lx);
+    else
+      return PR_ERR_PAREN_NOT_OPENED;
+  }
+
+  return PR_ERR_NOERROR;
+}
 
 /************************************ IRPR ************************************/
 
-struct Interpreter {};
+struct Interpreter;
 
 /************************************ USER ************************************/
 
-int main() {
+int main(void) {
 #define FILE_NAME "test.meva"
   FILE *fs = fopen(FILE_NAME, "w");
 
-  fprintf(fs, "(23.33^(3.5*3)*4)*3");
+#define EXPR "3*("
+
+  fprintf(fs, EXPR);
+  printf("%s\n", EXPR);
 
   fclose(fs);
 
@@ -497,10 +558,20 @@ int main() {
           },
   };
 
+  if (ferror(pr.lx.rd.src)) {
+    perror("cannot open file");
+    exit(3);
+  }
+
   struct Node node;
 
   lx_next_token(&pr.lx);
-  pr_next_mul_quo_mod_node(&pr, &node);
+  enum PR_ERR perr = pr_next_mul_quo_mod_node(&pr, &node);
+  if (perr != PR_ERR_NOERROR) {
+    printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
+           pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
+    exit(1);
+  }
   /* node.type = NT_MUL; */
   /* node.as.bp.a = malloc(sizeof(struct Node)); */
   /* node.as.bp.a->type = NT_PRIM_INT; */

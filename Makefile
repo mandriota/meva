@@ -1,8 +1,8 @@
 CC := gcc
-CFLAGS :=
+CFLAGS := -Wall -Wextra -Werror -Wpedantic
 
 run: build
 	./main
 
 build: main.c
-	gcc -o main main.c
+	$(CC) $(CFLAGS) -o main main.c
