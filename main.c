@@ -578,76 +578,9 @@ int main(void) {
            pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
     exit(1);
   }
-  /* node.type = NT_MUL; */
-  /* node.as.bp.a = malloc(sizeof(struct Node)); */
-  /* node.as.bp.a->type = NT_PRIM_INT; */
-  /* node.as.bp.a->as.pm.n_int = 2; */
-  /* node.as.bp.b = malloc(sizeof(struct Node)); */
-  /* node.as.bp.b->type = NT_MUL; */
-  /* node.as.bp.b->as.bp.a = malloc(sizeof(struct Node)); */
-  /* node.as.bp.b->as.bp.a->type = NT_PRIM_INT; */
-  /* node.as.bp.b->as.bp.a->as.pm.n_int = 3; */
-  /* node.as.bp.b->as.bp.b = malloc(sizeof(struct Node)); */
-  /* node.as.bp.b->as.bp.b->type = NT_PRIM_INT; */
-  /* node.as.bp.b->as.bp.b->as.pm.n_int = 5; */
-
-  /* printf("%s\n", nt_stringify(node.type)); */
-  /* printf("%s\n", nt_stringify(node.as.bp.a->type)); */
-  /* printf("%s\n", nt_stringify(node.as.bp.b->type)); */
-  /* printf("%d\n", node.as.bp.a->as.bp.a->type); */
-  /* printf("%d\n", node.as.bp.a->as.bp.b->type); */
 
   nd_debug_tree_print(node_p, 0, 10);
 
   fclose(pr.lx.rd.src);
   return 0;
 }
-
-/* int main() { */
-/* #define FILE_NAME "test.meva" */
-/*   FILE *fs = fopen(FILE_NAME, "w"); */
-
-/*   fprintf(fs, "something=e^(pi*i)/12346789987654321123456789"); */
-
-/*   fclose(fs); */
-
-/*   struct Lexer lx = { */
-/*       .rd = */
-/*           { */
-/*               .src = fopen(FILE_NAME, "r"), */
-/*               .page = */
-/*                   { */
-/*                       .str = */
-/*                           { */
-/*                               .data = malloc(getpagesize()), */
-/*                               .len = 0, */
-/*                           }, */
-/*                       .cap = getpagesize(), */
-/*                   }, */
-/*           }, */
-/*   }; */
-
-/*   enum TokenType tk; */
-/*   while (true) { */
-/*     tk = lx_next_token(&lx); */
-/*     if (tk == TT_EOS) */
-/*       return; */
-
-/*     printf("%zu:%zu: token: '%d' (%s)\n", lx.rd.row, lx.rd.col - 1, tk, */
-/*            tt_stringify(tk)); */
-
-/*     if (tk == TT_SYM) { */
-/*       printf("optional: %*s (len: %zu)\n", (int)lx.tk_opt.sb.str.len, */
-/*              lx.tk_opt.sb.str.data, lx.tk_opt.sb.str.len); */
-/*     } else if (tk == TT_INT) { */
-/*       printf("optional: %lld\n", lx.tk_opt.pv.n_int); */
-/*     } else if (tk == TT_FLT) { */
-/*       printf("optional: %Lf\n", lx.tk_opt.pv.n_flt); */
-/*     } */
-/*   } */
-
-/*   puts(""); // print new line, for debugging. */
-
-/*   fclose(lx.rd.src); */
-/*   return 0; */
-/* } */
