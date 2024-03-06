@@ -466,7 +466,7 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
   case TT_EOX:
-    return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
+    return PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED;
   default:
     return PR_ERR_TOKEN_UNEXPECTED;
   }
