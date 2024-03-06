@@ -434,29 +434,29 @@ const char *pr_err_stringify(enum PR_ERR pr_err) {
   return STRINGIFY(INVALID_PR_ERR);
 }
 
-enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node *node);
+enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node);
 
-enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node);
+enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node);
 
-enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node *node) {
+enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
   switch (pr->lx.tt) {
   case TT_ILL:
     return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
   case TT_EOS:
     return PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED;
   case TT_SYM:
-    node->type = NT_PRIM_SYM;
-    node->as.pm.str = pr->lx.tk_opt.pv.str;
+    (*node)->type = NT_PRIM_SYM;
+    (*node)->as.pm.str = pr->lx.tk_opt.pv.str;
     lx_next_token(&pr->lx);
     break;
   case TT_INT:
-    node->type = NT_PRIM_INT;
-    node->as.pm.n_int = pr->lx.tk_opt.pv.n_int;
+    (*node)->type = NT_PRIM_INT;
+    (*node)->as.pm.n_int = pr->lx.tk_opt.pv.n_int;
     lx_next_token(&pr->lx);
     break;
   case TT_FLT:
-    node->type = NT_PRIM_FLT;
-    node->as.pm.n_flt = pr->lx.tk_opt.pv.n_flt;
+    (*node)->type = NT_PRIM_FLT;
+    (*node)->as.pm.n_flt = pr->lx.tk_opt.pv.n_flt;
     lx_next_token(&pr->lx);
     break;
   case TT_LP0:
@@ -474,43 +474,47 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node *node) {
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node *node) {
+enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node) {
   struct Node *node_a = (struct Node *)malloc(sizeof(struct Node)), *node_b;
 
-  TRY(PR_ERR, pr_next_primitive_node(pr, node_a));
+  TRY(PR_ERR, pr_next_primitive_node(pr, &node_a));
 
   if (pr->lx.tt == TT_POW) {
     node_b = (struct Node *)malloc(sizeof(struct Node));
-    node->type = NT_BIOP_POW;
-    node->as.bp.a = node_a;
-    node->as.bp.b = node_b;
+    (*node)->type = NT_BIOP_POW;
+    (*node)->as.bp.a = node_a;
+    (*node)->as.bp.b = node_b;
 
     lx_next_token(&pr->lx);
 
-    TRY(PR_ERR, pr_next_pow_node(pr, node_b));
+    TRY(PR_ERR, pr_next_pow_node(pr, &node_b));
   } else
-    *node = *node_a;
+    **node = *node_a;
 
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node *node) {
-  struct Node *node_a = (struct Node *)malloc(sizeof(struct Node)), *node_b,
-              *node_p = node;
-  TRY(PR_ERR, pr_next_pow_node(pr, node_a));
+enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
+  (*node)->as.bp.a = (struct Node *)malloc(sizeof(struct Node));
+  TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.a));
 
-  if (pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO || pr->lx.tt == TT_MOD) {
-    node_b = (struct Node *)malloc(sizeof(struct Node));
-    node_p->type = NT_BIOP_MUL * (pr->lx.tt == TT_MUL) +
-                   NT_BIOP_QUO * (pr->lx.tt == TT_QUO) +
-                   NT_BIOP_MOD * (pr->lx.tt == TT_MOD);
-    node_p->as.bp.a = node_a;
-    node_p->as.bp.b = node_b;
+  struct Node *node_tmp = (*node)->as.bp.a;
 
-    lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_next_mul_quo_mod_node(pr, node_b)); // least priority node
-  } else
-    *node = *node_a;
+  while ((pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO)) {
+	(*node)->type =
+	  NT_BIOP_MUL * (pr->lx.tt == TT_MUL) +
+	  NT_BIOP_QUO * (pr->lx.tt == TT_QUO) +
+	  NT_BIOP_MOD * (pr->lx.tt == TT_MOD);
+	(*node)->as.bp.b = (struct Node *)malloc(sizeof(struct Node));
+	lx_next_token(&pr->lx);
+	TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.b));
+
+	node_tmp = *node;
+	*node = (struct Node *)malloc(sizeof(struct Node));
+	(*node)->as.bp.a = node_tmp;
+  }
+
+  *node = node_tmp;
 
   if (pr->lx.tt == TT_RP0) {
     if (--pr->p0c >= 0)
@@ -532,7 +536,7 @@ int main(void) {
 #define FILE_NAME "test.meva"
   FILE *fs = fopen(FILE_NAME, "w");
 
-#define EXPR "3*("
+#define EXPR "1*2*3/4^2.4^4.2/5"
 
   fprintf(fs, EXPR);
   printf("%s\n", EXPR);
@@ -565,8 +569,10 @@ int main(void) {
 
   struct Node node;
 
+  struct Node * node_p = &node;
+
   lx_next_token(&pr.lx);
-  enum PR_ERR perr = pr_next_mul_quo_mod_node(&pr, &node);
+  enum PR_ERR perr = pr_next_mul_quo_mod_node(&pr, &node_p);
   if (perr != PR_ERR_NOERROR) {
     printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
            pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
@@ -585,13 +591,13 @@ int main(void) {
   /* node.as.bp.b->as.bp.b->type = NT_PRIM_INT; */
   /* node.as.bp.b->as.bp.b->as.pm.n_int = 5; */
 
-  /* printf("%d\n", node.type); */
-  /* printf("%d\n", node.as.bp.a->type); */
-  /* printf("%d\n", node.as.bp.b->type); */
+  /* printf("%s\n", nt_stringify(node.type)); */
+  /* printf("%s\n", nt_stringify(node.as.bp.a->type)); */
+  /* printf("%s\n", nt_stringify(node.as.bp.b->type)); */
   /* printf("%d\n", node.as.bp.a->as.bp.a->type); */
   /* printf("%d\n", node.as.bp.a->as.bp.b->type); */
 
-  nd_debug_tree_print(&node, 0, 10);
+  nd_debug_tree_print(node_p, 0, 10);
 
   fclose(pr.lx.rd.src);
   return 0;
