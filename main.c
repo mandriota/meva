@@ -16,6 +16,8 @@
 *                                                                              *
 \******************************************************************************/
 
+#include "arena.h"
+
 #include <assert.h>
 #include <math.h>
 #include <stdbool.h>
@@ -47,6 +49,8 @@
       return err;                                                              \
   }
 
+static struct Arena default_arena = {.head = NULL};
+
 struct String {
   char *data;
   size_t len;
@@ -59,7 +63,8 @@ struct StringBuffer {
 
 void sb_push_char(struct StringBuffer *sb, char cc) {
   if (sb->str.len >= sb->cap)
-    sb->str.data = realloc(sb->str.data, sb->cap * 2 + sb->cap == 0);
+    sb->str.data = arena_reacquire(&default_arena, sb->str.data,
+                                   sb->cap * 2 + sb->cap == 0);
 
   sb->str.data[sb->str.len++] = cc;
 }
@@ -235,7 +240,8 @@ void lx_read_symbol(struct Lexer *lx) {
 
   lx->tk_opt.sb.cap = 64;
   lx->tk_opt.sb.str.len = 0;
-  lx->tk_opt.sb.str.data = malloc(lx->tk_opt.sb.cap);
+  lx->tk_opt.sb.str.data =
+      (char *)arena_acquire(&default_arena, lx->tk_opt.sb.cap);
   if (lx->tk_opt.sb.str.data == NULL) {
     perror("cannot allocate memory");
     exit(3);
@@ -475,43 +481,45 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
 }
 
 enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node) {
-  struct Node *node_a = (struct Node *)malloc(sizeof(struct Node)), *node_b;
+  (*node)->as.bp.a =
+      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  TRY(PR_ERR, pr_next_primitive_node(pr, &node_a));
+  TRY(PR_ERR, pr_next_primitive_node(pr, &(*node)->as.bp.a));
 
   if (pr->lx.tt == TT_POW) {
-    node_b = (struct Node *)malloc(sizeof(struct Node));
+    (*node)->as.bp.b =
+        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->type = NT_BIOP_POW;
-    (*node)->as.bp.a = node_a;
-    (*node)->as.bp.b = node_b;
 
     lx_next_token(&pr->lx);
 
-    TRY(PR_ERR, pr_next_pow_node(pr, &node_b));
+    TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.b));
   } else
-    **node = *node_a;
+    **node = *(*node)->as.bp.a;
 
   return PR_ERR_NOERROR;
 }
 
 enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
-  (*node)->as.bp.a = (struct Node *)malloc(sizeof(struct Node));
+  (*node)->as.bp.a =
+      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+
   TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.a));
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
   while ((pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO)) {
-	(*node)->type =
-	  NT_BIOP_MUL * (pr->lx.tt == TT_MUL) +
-	  NT_BIOP_QUO * (pr->lx.tt == TT_QUO) +
-	  NT_BIOP_MOD * (pr->lx.tt == TT_MOD);
-	(*node)->as.bp.b = (struct Node *)malloc(sizeof(struct Node));
-	lx_next_token(&pr->lx);
-	TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.b));
+    (*node)->type = NT_BIOP_MUL * (pr->lx.tt == TT_MUL) +
+                    NT_BIOP_QUO * (pr->lx.tt == TT_QUO) +
+                    NT_BIOP_MOD * (pr->lx.tt == TT_MOD);
+    (*node)->as.bp.b =
+        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    lx_next_token(&pr->lx);
+    TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.b));
 
-	node_tmp = *node;
-	*node = (struct Node *)malloc(sizeof(struct Node));
-	(*node)->as.bp.a = node_tmp;
+    node_tmp = *node;
+    *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    (*node)->as.bp.a = node_tmp;
   }
 
   *node = node_tmp;
@@ -553,7 +561,8 @@ int main(void) {
                           {
                               .str =
                                   {
-                                      .data = malloc(getpagesize()),
+                                      .data = arena_acquire(&default_arena,
+                                                            getpagesize()),
                                       .len = 0,
                                   },
                               .cap = getpagesize(),
@@ -564,12 +573,12 @@ int main(void) {
 
   if (ferror(pr.lx.rd.src)) {
     perror("cannot open file");
-    exit(3);
+    exit(3); // TODO: add global enum of error codes
   }
 
   struct Node node;
 
-  struct Node * node_p = &node;
+  struct Node *node_p = &node;
 
   lx_next_token(&pr.lx);
   enum PR_ERR perr = pr_next_mul_quo_mod_node(&pr, &node_p);
@@ -579,8 +588,12 @@ int main(void) {
     exit(1);
   }
 
-  nd_debug_tree_print(node_p, 0, 10);
+  nd_debug_tree_print(node_p, 0, 100);
 
   fclose(pr.lx.rd.src);
+
+  arena_reset(&default_arena);
+  printf("\nmemory deallocated!\n");
+
   return 0;
 }
