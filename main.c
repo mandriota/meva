@@ -444,6 +444,10 @@ enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node);
 
 enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node);
 
+enum PR_ERR pr_next_add_sub_node(struct Parser *pr, struct Node **node);
+
+enum PR_ERR pr_next_let_node(struct Parser *pr, struct Node **node);
+
 enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
   switch (pr->lx.tt) {
   case TT_ILL:
@@ -468,7 +472,7 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
   case TT_LP0:
     ++pr->p0c;
     lx_next_token(&pr->lx);
-    return pr_next_mul_quo_mod_node(pr, node);
+    return pr_next_let_node(pr, node);
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
   case TT_EOX:
@@ -508,7 +512,7 @@ enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
-  while ((pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO)) {
+  while (pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO || pr->lx.tt == TT_MOD) {
     (*node)->type = NT_BIOP_MUL * (pr->lx.tt == TT_MUL) +
                     NT_BIOP_QUO * (pr->lx.tt == TT_QUO) +
                     NT_BIOP_MOD * (pr->lx.tt == TT_MOD);
@@ -524,12 +528,51 @@ enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
 
   *node = node_tmp;
 
-  if (pr->lx.tt == TT_RP0) {
-    if (--pr->p0c >= 0)
-      lx_next_token(&pr->lx);
-    else
-      return PR_ERR_PAREN_NOT_OPENED;
+  return PR_ERR_NOERROR;
+}
+
+enum PR_ERR pr_next_add_sub_node(struct Parser *pr, struct Node **node) {
+  (*node)->as.bp.a =
+      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+
+  TRY(PR_ERR, pr_next_mul_quo_mod_node(pr, &(*node)->as.bp.a));
+
+  struct Node *node_tmp = (*node)->as.bp.a;
+
+  while (pr->lx.tt == TT_ADD || pr->lx.tt == TT_SUB) {
+    (*node)->type = NT_BIOP_ADD * (pr->lx.tt == TT_ADD) +
+                    NT_BIOP_SUB * (pr->lx.tt == TT_SUB);
+    (*node)->as.bp.b =
+        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    lx_next_token(&pr->lx);
+    TRY(PR_ERR, pr_next_mul_quo_mod_node(pr, &(*node)->as.bp.b));
+
+    node_tmp = *node;
+    *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    (*node)->as.bp.a = node_tmp;
   }
+
+  *node = node_tmp;
+
+  return PR_ERR_NOERROR;
+}
+
+enum PR_ERR pr_next_let_node(struct Parser *pr, struct Node **node) {
+  (*node)->as.bp.a =
+      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+
+  TRY(PR_ERR, pr_next_add_sub_node(pr, &(*node)->as.bp.a));
+
+  if (pr->lx.tt == TT_LET) {
+    (*node)->as.bp.b =
+        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    (*node)->type = NT_BIOP_LET;
+
+    lx_next_token(&pr->lx);
+
+    TRY(PR_ERR, pr_next_let_node(pr, &(*node)->as.bp.b));
+  } else
+    **node = *(*node)->as.bp.a;
 
   return PR_ERR_NOERROR;
 }
@@ -538,13 +581,63 @@ enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
 
 struct Interpreter;
 
+#define test_ir_biop_exec(int_expr, flt_expr, dst, src)                        \
+  {                                                                            \
+    test_ir_exec(dst, src->as.bp.a);                                           \
+    enum NodeType a_type = (*dst)->type;                                       \
+    union Primitive a_value = (*dst)->as.pm;                                   \
+    test_ir_exec(dst, src->as.bp.b);                                           \
+    union Primitive b_value = (*dst)->as.pm;                                   \
+    if (a_type == NT_PRIM_INT) {                                               \
+      (*dst)->type = NT_PRIM_INT;                                              \
+      (*dst)->as.pm.n_int = int_expr;                                          \
+    } else if (a_type == NT_PRIM_FLT) {                                        \
+      (*dst)->type = NT_PRIM_FLT;                                              \
+      (*dst)->as.pm.n_flt = flt_expr;                                          \
+    };                                                                         \
+    return;                                                                    \
+  }
+
+void test_ir_exec(struct Node **dst, struct Node *src) {
+  switch (src->type) {
+  case NT_PRIM_SYM:
+  case NT_PRIM_INT:
+  case NT_PRIM_FLT:
+    *dst = src;
+    return;
+  case NT_BIOP_LET:
+    return;
+  case NT_BIOP_ADD:
+    test_ir_biop_exec(a_value.n_int + b_value.n_int,
+                      a_value.n_flt + b_value.n_flt, dst, src);
+  case NT_BIOP_SUB:
+    test_ir_biop_exec(a_value.n_int - b_value.n_int,
+                      a_value.n_flt - b_value.n_flt, dst, src);
+  case NT_BIOP_MUL:
+    test_ir_biop_exec(a_value.n_int * b_value.n_int,
+                      a_value.n_flt * b_value.n_flt, dst, src);
+  case NT_BIOP_QUO:
+    test_ir_biop_exec(a_value.n_int / b_value.n_int,
+                      a_value.n_flt / b_value.n_flt, dst, src);
+  case NT_BIOP_MOD:
+    test_ir_biop_exec(a_value.n_int % b_value.n_int,
+                      fmodl(a_value.n_flt, b_value.n_flt), dst, src);
+  case NT_UNOP_NEG:
+    return;
+  case NT_BIOP_POW:
+    test_ir_biop_exec(
+        (int64_t)powl((long double)a_value.n_int, (long double)b_value.n_int),
+        powl(a_value.n_flt, b_value.n_flt), dst, src);
+  }
+}
+
 /************************************ USER ************************************/
 
 int main(void) {
 #define FILE_NAME "test.meva"
   FILE *fs = fopen(FILE_NAME, "w");
 
-#define EXPR "1*2*3/4^2.4^4.2/5"
+#define EXPR "7+3*2^(4+3)"
 
   fprintf(fs, EXPR);
   printf("%s\n", EXPR);
@@ -581,7 +674,7 @@ int main(void) {
   struct Node *node_p = &node;
 
   lx_next_token(&pr.lx);
-  enum PR_ERR perr = pr_next_mul_quo_mod_node(&pr, &node_p);
+  enum PR_ERR perr = pr_next_let_node(&pr, &node_p);
   if (perr != PR_ERR_NOERROR) {
     printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
            pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
@@ -590,9 +683,14 @@ int main(void) {
 
   nd_debug_tree_print(node_p, 0, 100);
 
+  struct Node *node_dst = arena_acquire(&default_arena, sizeof(struct Node));
+  test_ir_exec(&node_dst, node_p);
+
+  nd_debug_tree_print(node_dst, 0, 100);
+
   fclose(pr.lx.rd.src);
 
-  arena_reset(&default_arena);
+  arena_dealloc(&default_arena);
   printf("\nmemory deallocated!\n");
 
   return 0;
