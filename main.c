@@ -296,22 +296,22 @@ void lx_next_token(struct Lexer *lx) {
 /************************************ PRSR ************************************/
 
 enum NodeType {
-  NT_PRIM_SYM,
-  NT_PRIM_INT,
-  NT_PRIM_FLT,
+  NT_PRIM_SYM = TT_SYM,
+  NT_PRIM_INT = TT_INT,
+  NT_PRIM_FLT = TT_FLT,
 
-  NT_BIOP_LET,
+  NT_BIOP_LET = TT_LET,
 
-  NT_BIOP_ADD,
-  NT_BIOP_SUB,
+  NT_BIOP_ADD = TT_ADD,
+  NT_BIOP_SUB = TT_SUB,
 
-  NT_BIOP_MUL,
-  NT_BIOP_QUO,
-  NT_BIOP_MOD,
+  NT_BIOP_MUL = TT_MUL,
+  NT_BIOP_QUO = TT_QUO,
+  NT_BIOP_MOD = TT_MOD,
 
   NT_UNOP_NEG,
 
-  NT_BIOP_POW,
+  NT_BIOP_POW = TT_POW,
 };
 
 const char *nt_stringify(enum NodeType nt) {
@@ -473,7 +473,7 @@ enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node) {
   if (pr->lx.tt == TT_POW) {
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node)->type = NT_BIOP_POW;
+    (*node)->type = (enum NodeType)pr->lx.tt;
 
     lx_next_token(&pr->lx);
 
@@ -493,9 +493,7 @@ enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
   struct Node *node_tmp = (*node)->as.bp.a;
 
   while (pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO || pr->lx.tt == TT_MOD) {
-    (*node)->type = NT_BIOP_MUL * (pr->lx.tt == TT_MUL) +
-                    NT_BIOP_QUO * (pr->lx.tt == TT_QUO) +
-                    NT_BIOP_MOD * (pr->lx.tt == TT_MOD);
+    (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     lx_next_token(&pr->lx);
@@ -520,8 +518,7 @@ enum PR_ERR pr_next_add_sub_node(struct Parser *pr, struct Node **node) {
   struct Node *node_tmp = (*node)->as.bp.a;
 
   while (pr->lx.tt == TT_ADD || pr->lx.tt == TT_SUB) {
-    (*node)->type = NT_BIOP_ADD * (pr->lx.tt == TT_ADD) +
-                    NT_BIOP_SUB * (pr->lx.tt == TT_SUB);
+    (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     lx_next_token(&pr->lx);
@@ -546,7 +543,7 @@ enum PR_ERR pr_next_let_node(struct Parser *pr, struct Node **node) {
   if (pr->lx.tt == TT_LET) {
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node)->type = NT_BIOP_LET;
+    (*node)->type = (enum NodeType)pr->lx.tt;
 
     lx_next_token(&pr->lx);
 
