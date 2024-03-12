@@ -81,27 +81,27 @@ union Primitive {
 
 enum TokenType {
   TT_ILL = -1,
-  TT_EOS,
+  TT_EOS = '\0',
 
   TT_SYM,
   TT_INT,
   TT_FLT,
 
-  TT_LET,
+  TT_LET = '=',
 
-  TT_ADD,
-  TT_SUB,
+  TT_ADD = '+',
+  TT_SUB = '-',
 
-  TT_MUL,
-  TT_QUO,
-  TT_MOD,
+  TT_MUL = '*',
+  TT_QUO = '/',
+  TT_MOD = '%',
 
-  TT_POW,
+  TT_POW = '^',
 
-  TT_LP0,
-  TT_RP0,
+  TT_LP0 = '(',
+  TT_RP0 = ')',
 
-  TT_EOX,
+  TT_EOX = ';',
 };
 
 const char *tt_stringify(enum TokenType tt) {
@@ -268,38 +268,18 @@ void lx_next_token(struct Lexer *lx) {
 
   char cc = lx->rd.page.str.data[lx->rd.ptr];
   switch (cc) {
-  case '=':
-    lx->tt = TT_LET;
-    return;
-  case '+':
-    lx->tt = TT_ADD;
-    return;
-  case '-':
-    lx->tt = TT_SUB;
-    return;
-  case '*':
-    lx->tt = TT_MUL;
-    return;
-  case '/':
-    lx->tt = TT_QUO;
-    return;
-  case '%':
-    lx->tt = TT_MOD;
-    return;
-  case '^':
-    lx->tt = TT_POW;
-    return;
-  case '(':
-    lx->tt = TT_LP0;
-    return;
-  case ')':
-    lx->tt = TT_RP0;
-    return;
-  case ';':
-    lx->tt = TT_EOX;
-    return;
-  case '\0':
-    lx->tt = TT_EOS;
+  case TT_LET:
+  case TT_ADD:
+  case TT_SUB:
+  case TT_MUL:
+  case TT_QUO:
+  case TT_MOD:
+  case TT_POW:
+  case TT_LP0:
+  case TT_RP0:
+  case TT_EOX:
+  case TT_EOS:
+    lx->tt = cc;
     return;
   }
 
