@@ -1,14 +1,21 @@
 # (=​｀ω´=) MEWA
 A simple Math EWAluator written on C.
 
-## Featchers (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧
+## Build from Source
+```sh
+git clone https://github.com/mandriota/mewa
+cd mewa
+make build
+```
+
+## Featchers (。・・)_且
 - [X] Basic arithmetic operators
 - [X] Operators priority and associativity
 - [X] Type inference
 - [ ] Functions
 - [ ] Variables
 
-## Naming Conventions ☜(ﾟヮﾟ☜)
+## Naming Conventions ＿φ(￣ー￣ )
 ### Constants, Enums, Defines
 All caps, snake case.
 
