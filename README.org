@@ -1,4 +1,4 @@
-* (^◔ᴥ◔^) Mewa
+* (^◔ᴥ◔^) MEWA
 A simple Math EWAluator written on C.
 
 ** (☞ﾟヮﾟ)☞ Naming Conventions
