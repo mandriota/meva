@@ -38,3 +38,6 @@ Same as functions. First word is an abbreviation of struct name.
 | `NodeType`    | `NT`         |
 | `Parser`      | `PR`         |
 | `Interpreter` | `IR`         |
+
+## Acknowledgements
+- Thanks to [Giovanni Crisalfi](https://github.com/gicrisf) for [the kaomoji collection used here](https://github.com/gicrisf/kaomel/tree/main).
