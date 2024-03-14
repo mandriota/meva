@@ -14,8 +14,19 @@
 *   See the License for the specific language governing permissions and        *
 *   limitations under the License.                                             *
 *                                                                              *
+*                                                                              *
+*               :::   :::  :::::::::::::     :::    :::                        *
+*             :+:+: :+:+: :+:       :+:     :+:  :+: :+:                       *
+*           +:+ +:+:+ +:++:+       +:+     +:+ +:+   +:+                       *
+*          +#+  +:+  +#++#++:++#  +#+     +:++#++:++#++:                       *
+*         +#+       +#++#+        +#+   +#+ +#+     +#+                        *
+*        #+#       #+##+#         #+#+#+#  #+#     #+#                         *
+*       ###       #############    ###    ###     ###                          *
+*                                                                              *
+*                                                                              *
 \******************************************************************************/
 
+//=:includes
 #include "arena.h"
 
 #include <assert.h>
@@ -27,7 +38,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-/************************************ UTIL ************************************/
+//=:util
+//           _   _ _
+//          | | (_) |
+//     _   _| |_ _| |
+//    | | | | __| | |
+//    | |_| | |_| | |
+//     \__,_|\__|_|_|
 
 #define IS_WHITESPACE(c)                                                       \
   (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
@@ -69,62 +86,53 @@ void sb_push_char(struct StringBuffer *sb, char cc) {
   sb->str.data[sb->str.len++] = cc;
 }
 
-/************************************ RUNT ************************************/
+//=:runtime
+//                      _   _
+//                     | | (_)
+//     _ __ _   _ _ __ | |_ _ _ __ ___   ___
+//    | '__| | | | '_ \| __| | '_ ` _ \ / _	\
+//    | |  | |_| | | | | |_| | | | | | |  __/
+//    |_|   \__,_|_| |_|\__|_|_| |_| |_|\___|
+
+//=:runtime:types
+typedef struct String str_t;
+
+typedef long double flt_t;
+
+typedef uint64_t unt_t;
+
+typedef int64_t int_t;
 
 union Primitive {
-  struct String str;
-  long double n_flt;
-  int64_t n_int;
+  str_t str;
+  flt_t n_flt;
+  int_t n_int;
 };
 
-/************************************ LEXR ************************************/
+//=:runtime:operators
+int_t pow_int(int_t base, int_t expo) {
+  if (expo == 0)
+    return 1;
+  if (expo == 1)
+    return base;
 
-enum TokenType {
-  TT_ILL = -1,
-  TT_EOS = '\0',
-
-  TT_SYM,
-  TT_INT,
-  TT_FLT,
-
-  TT_LET = '=',
-
-  TT_ADD = '+',
-  TT_SUB = '-',
-
-  TT_MUL = '*',
-  TT_QUO = '/',
-  TT_MOD = '%',
-
-  TT_POW = '^',
-
-  TT_LP0 = '(',
-  TT_RP0 = ')',
-
-  TT_EOX = ';',
-};
-
-const char *tt_stringify(enum TokenType tt) {
-  switch (tt) {
-    STRINGIFY_CASE(TT_ILL)
-    STRINGIFY_CASE(TT_EOS)
-    STRINGIFY_CASE(TT_SYM)
-    STRINGIFY_CASE(TT_INT)
-    STRINGIFY_CASE(TT_FLT)
-    STRINGIFY_CASE(TT_LET)
-    STRINGIFY_CASE(TT_ADD)
-    STRINGIFY_CASE(TT_SUB)
-    STRINGIFY_CASE(TT_MUL)
-    STRINGIFY_CASE(TT_QUO)
-    STRINGIFY_CASE(TT_MOD)
-    STRINGIFY_CASE(TT_POW)
-    STRINGIFY_CASE(TT_LP0)
-    STRINGIFY_CASE(TT_RP0)
-    STRINGIFY_CASE(TT_EOX)
+  int_t rt = 1;
+  while (expo > 0) {
+    if (expo % 2 == 1)
+      rt *= base;
+    expo >>= 1;
+    base *= base;
   }
-
-  return STRINGIFY(INVALID_TT);
+  return rt;
 }
+
+//=:reader
+//                        _
+//                       | |
+//     _ __ ___  __ _  __| | ___ _ __
+//    | '__/ _ \/ _` |/ _` |/ _ \ '__|
+//    | | |  __/ (_| | (_| |  __/ |
+//    |_|  \___|\__,_|\__,_|\___|_|
 
 struct Reader {
   struct StringBuffer page;
@@ -175,6 +183,63 @@ void rd_skip_whitespaces(struct Reader *restrict rd) {
     rd_next_char(rd);
 }
 
+//=:lexer
+//     _
+//    | |
+//    | | _____  _____ _ __
+//    | |/ _ \ \/ / _ \ '__|
+//    | |  __/>  <  __/ |
+//    |_|\___/_/\_\___|_|
+
+//=:lexer:tokens
+enum TokenType {
+  TT_ILL = -1,
+  TT_EOS = '\0',
+
+  TT_SYM,
+  TT_INT,
+  TT_FLT,
+
+  TT_LET = '=',
+
+  TT_ADD = '+',
+  TT_SUB = '-',
+
+  TT_MUL = '*',
+  TT_QUO = '/',
+  TT_MOD = '%',
+
+  TT_POW = '^',
+
+  TT_LP0 = '(',
+  TT_RP0 = ')',
+
+  TT_EOX = ';',
+};
+
+const char *tt_stringify(enum TokenType tt) {
+  switch (tt) {
+    STRINGIFY_CASE(TT_ILL)
+    STRINGIFY_CASE(TT_EOS)
+    STRINGIFY_CASE(TT_SYM)
+    STRINGIFY_CASE(TT_INT)
+    STRINGIFY_CASE(TT_FLT)
+    STRINGIFY_CASE(TT_LET)
+    STRINGIFY_CASE(TT_ADD)
+    STRINGIFY_CASE(TT_SUB)
+    STRINGIFY_CASE(TT_MUL)
+    STRINGIFY_CASE(TT_QUO)
+    STRINGIFY_CASE(TT_MOD)
+    STRINGIFY_CASE(TT_POW)
+    STRINGIFY_CASE(TT_LP0)
+    STRINGIFY_CASE(TT_RP0)
+    STRINGIFY_CASE(TT_EOX)
+  }
+
+  return STRINGIFY(INVALID_TT);
+}
+
+//=:lexer:lexer
 struct Lexer {
   struct Reader rd;
 
@@ -186,13 +251,13 @@ struct Lexer {
   } tk_opt;
 };
 
-int64_t lx_read_integer(struct Lexer *lx, int64_t *mnt, int64_t *exp) {
+int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
   *mnt = 0;
   *exp = 0;
 
-  int64_t pow10 = 1;
+  int_t pow10 = 1;
 
-  const int64_t limit = (((uint64_t)1 << (sizeof(pow10) * 8 - 1)) - 1) / 10;
+  const int_t limit = (((unt_t)1 << (sizeof(pow10) * 8 - 1)) - 1) / 10;
 
   bool overflow = false;
 
@@ -215,18 +280,18 @@ int64_t lx_read_integer(struct Lexer *lx, int64_t *mnt, int64_t *exp) {
 void lx_next_token_number(struct Lexer *lx) {
   lx->tt = TT_FLT;
 
-  int64_t mnt, exp;
+  int_t mnt, exp;
   lx_read_integer(lx, &mnt, &exp);
 
-  lx->tk_opt.pv.n_flt = (long double)mnt * powl(10, exp);
+  lx->tk_opt.pv.n_flt = (flt_t)mnt * powl(10, exp);
 
   char cc;
   if (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
       (cc = lx->rd.page.str.data[lx->rd.ptr]) == '.') {
 
     rd_next_char(&lx->rd);
-    int64_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
-    lx->tk_opt.pv.n_flt += (long double)mnt / decimal_log10;
+    int_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
+    lx->tk_opt.pv.n_flt += (flt_t)mnt / decimal_log10;
   } else if (exp == 0) {
     lx->tt = TT_INT;
     lx->tk_opt.pv.n_int = mnt;
@@ -293,8 +358,15 @@ void lx_next_token(struct Lexer *lx) {
     lx->tt = TT_ILL;
 }
 
-/************************************ PRSR ************************************/
+//=:parser
+//     _ __   __ _ _ __ ___  ___ _ __
+//    | '_ \ / _` | '__/ __|/ _ \ '__|
+//    | |_) | (_| | |  \__ \  __/ |
+//    | .__/ \__,_|_|  |___/\___|_|
+//    | |
+//    |_|
 
+//=:parser:nodes
 enum NodeType {
   NT_PRIM_SYM = TT_SYM,
   NT_PRIM_INT = TT_INT,
@@ -386,10 +458,11 @@ void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
   }
 }
 
+//=:parser:parser
 struct Parser {
   struct Lexer lx;
 
-  int64_t p0c;
+  int_t p0c;
 };
 
 enum PR_ERR {
@@ -551,82 +624,180 @@ enum PR_ERR pr_next_let_node(struct Parser *pr, struct Node **node) {
   } else
     **node = *(*node)->as.bp.a;
 
+  if (pr->lx.tt == TT_RP0) {
+    if (--pr->p0c >= 0)
+      lx_next_token(&pr->lx);
+    else
+      return PR_ERR_PAREN_NOT_OPENED;
+  }
+
   return PR_ERR_NOERROR;
 }
 
-/************************************ IRPR ************************************/
+//=:interpreter
+//     _       _                           _
+//    (_)     | |                         | |
+//     _ _ __ | |_ ___ _ __ _ __  _ __ ___| |_ ___ _ __
+//    | | '_ \| __/ _ \ '__| '_ \| '__/ _ \ __/ _ \ '__|
+//    | | | | | ||  __/ |  | |_) | | |  __/ ||  __/ |
+//    |_|_| |_|\__\___|_|  | .__/|_|  \___|\__\___|_|
+//                         | |
+//                         |_|
 
 struct Interpreter;
 
-#define test_ir_biop_exec(int_expr, flt_expr, dst, src)                        \
-  {                                                                            \
-    test_ir_exec(dst, src->as.bp.a);                                           \
-    enum NodeType a_type = (*dst)->type;                                       \
-    union Primitive a_value = (*dst)->as.pm;                                   \
-    test_ir_exec(dst, src->as.bp.b);                                           \
-    union Primitive b_value = (*dst)->as.pm;                                   \
-    if (a_type == NT_PRIM_INT) {                                               \
-      (*dst)->type = NT_PRIM_INT;                                              \
-      (*dst)->as.pm.n_int = int_expr;                                          \
-    } else if (a_type == NT_PRIM_FLT) {                                        \
-      (*dst)->type = NT_PRIM_FLT;                                              \
-      (*dst)->as.pm.n_flt = flt_expr;                                          \
-    };                                                                         \
-    return;                                                                    \
+enum IR_ERR {
+  IR_ERR_NOERROR,
+  IR_ERR_DIV_BY_ZERO,
+};
+
+const char *ir_err_stringify(enum IR_ERR ir_err) {
+  switch (ir_err) {
+    STRINGIFY_CASE(IR_ERR_NOERROR)
+    STRINGIFY_CASE(IR_ERR_DIV_BY_ZERO)
   }
 
-void test_ir_exec(struct Node **dst, struct Node *src) {
+  return STRINGIFY(INVALID_IR_ERR);
+}
+
+enum IR_ERR ir_exec(struct Node **dst, struct Node *src);
+
+enum IR_ERR ir_biop_exec_int(struct Node *dst, enum NodeType op,
+                             union Primitive a, union Primitive b) {
+  dst->type = NT_PRIM_INT;
+
+  switch (op) {
+  case NT_BIOP_ADD:
+    dst->as.pm.n_int = a.n_int + b.n_int;
+    break;
+  case NT_BIOP_SUB:
+    dst->as.pm.n_int = a.n_int - b.n_int;
+    break;
+  case NT_BIOP_MUL:
+    dst->as.pm.n_int = a.n_int * b.n_int;
+    break;
+  case NT_BIOP_QUO:
+    if (b.n_int == 0)
+      return IR_ERR_DIV_BY_ZERO;
+
+    if (a.n_int % b.n_int != 0) {
+      dst->type = NT_PRIM_FLT;
+      dst->as.pm.n_flt = (flt_t)a.n_int / b.n_int;
+    } else
+      dst->as.pm.n_int = a.n_int / b.n_int;
+
+    break;
+  case NT_BIOP_MOD:
+    dst->as.pm.n_int = a.n_int % b.n_int;
+    break;
+  case NT_BIOP_POW:
+    if (b.n_int < 0) {
+      dst->type = NT_PRIM_FLT;
+      dst->as.pm.n_flt = powl((flt_t)a.n_int, (flt_t)b.n_int);
+    } else
+      dst->as.pm.n_int = pow_int(a.n_int, b.n_int);
+
+    break;
+  default:
+    dst->as.pm.n_int = 0;
+    break;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
+enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
+                             union Primitive a, union Primitive b) {
+  dst->type = NT_PRIM_FLT;
+
+  switch (op) {
+  case NT_BIOP_ADD:
+    dst->as.pm.n_flt = a.n_flt + b.n_flt;
+    break;
+  case NT_BIOP_SUB:
+    dst->as.pm.n_flt = a.n_flt - b.n_flt;
+    break;
+  case NT_BIOP_MUL:
+    dst->as.pm.n_flt = a.n_flt * b.n_flt;
+    break;
+  case NT_BIOP_QUO:
+    if (b.n_flt == 0)
+      return IR_ERR_DIV_BY_ZERO;
+
+    dst->as.pm.n_flt = a.n_flt / b.n_flt;
+    break;
+  case NT_BIOP_MOD:
+    dst->as.pm.n_flt = fmodl(a.n_flt, b.n_flt);
+    break;
+  case NT_BIOP_POW:
+    dst->as.pm.n_flt = powl(a.n_flt, b.n_flt);
+    break;
+  default:
+    break;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
+enum IR_ERR ir_biop_exec(struct Node **dst, struct Node *src) {
+  TRY(IR_ERR, ir_exec(dst, src->as.bp.a));
+  enum NodeType node_a_type = (*dst)->type;
+  union Primitive node_a_value = (*dst)->as.pm;
+
+  ir_exec(dst, src->as.bp.b);
+  enum NodeType node_b_type = (*dst)->type;
+  union Primitive node_b_value = (*dst)->as.pm;
+
+  if (node_a_type == NT_PRIM_FLT && node_b_type == NT_PRIM_INT) {
+    node_b_type = NT_PRIM_FLT;
+    node_b_value.n_flt = node_b_value.n_int;
+  }
+
+  if (node_a_type == NT_PRIM_INT && node_b_type == NT_PRIM_FLT) {
+    node_a_type = NT_PRIM_FLT;
+    node_a_value.n_flt = node_a_value.n_int;
+  }
+
+  if (node_a_type == NT_PRIM_FLT)
+    TRY(IR_ERR, ir_biop_exec_flt(*dst, src->type, node_a_value, node_b_value));
+
+  if (node_a_type == NT_PRIM_INT)
+    TRY(IR_ERR, ir_biop_exec_int(*dst, src->type, node_a_value, node_b_value));
+
+  return IR_ERR_NOERROR;
+}
+
+enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
   switch (src->type) {
   case NT_PRIM_SYM:
   case NT_PRIM_INT:
   case NT_PRIM_FLT:
     *dst = src;
-    return;
-  case NT_BIOP_LET:
-    return;
-  case NT_BIOP_ADD:
-    test_ir_biop_exec(a_value.n_int + b_value.n_int,
-                      a_value.n_flt + b_value.n_flt, dst, src);
-  case NT_BIOP_SUB:
-    test_ir_biop_exec(a_value.n_int - b_value.n_int,
-                      a_value.n_flt - b_value.n_flt, dst, src);
-  case NT_BIOP_MUL:
-    test_ir_biop_exec(a_value.n_int * b_value.n_int,
-                      a_value.n_flt * b_value.n_flt, dst, src);
-  case NT_BIOP_QUO:
-    test_ir_biop_exec(a_value.n_int / b_value.n_int,
-                      a_value.n_flt / b_value.n_flt, dst, src);
-  case NT_BIOP_MOD:
-    test_ir_biop_exec(a_value.n_int % b_value.n_int,
-                      fmodl(a_value.n_flt, b_value.n_flt), dst, src);
+    break;
   case NT_UNOP_NEG:
-    return;
-  case NT_BIOP_POW:
-    test_ir_biop_exec(
-        (int64_t)powl((long double)a_value.n_int, (long double)b_value.n_int),
-        powl(a_value.n_flt, b_value.n_flt), dst, src);
+    break;
+  default:
+    TRY(IR_ERR, ir_biop_exec(dst, src));
   }
+
+  return IR_ERR_NOERROR;
 }
 
-/************************************ USER ************************************/
+//=:user
+//     _   _ ___  ___ _ __
+//    | | | / __|/ _ \ '__|
+//    | |_| \__ \  __/ |
+//     \__,_|___/\___|_|
+
+int repl(void) { return 0; }
 
 int main(void) {
-#define FILE_NAME "test.meva"
-  FILE *fs = fopen(FILE_NAME, "w");
-
-#define EXPR "7+3*2^(4+3)"
-
-  fprintf(fs, EXPR);
-  printf("%s\n", EXPR);
-
-  fclose(fs);
-
   struct Parser pr = {
       .lx =
           {
               .rd =
                   {
-                      .src = fopen(FILE_NAME, "r"),
+                      .src = stdin,
                       .page =
                           {
                               .str =
@@ -640,11 +811,6 @@ int main(void) {
                   },
           },
   };
-
-  if (ferror(pr.lx.rd.src)) {
-    perror("cannot open file");
-    exit(3); // TODO: add global enum of error codes
-  }
 
   struct Node node;
 
@@ -661,14 +827,20 @@ int main(void) {
   nd_debug_tree_print(node_p, 0, 100);
 
   struct Node *node_dst = arena_acquire(&default_arena, sizeof(struct Node));
-  test_ir_exec(&node_dst, node_p);
 
+  enum IR_ERR ierr = ir_exec(&node_dst, node_p);
+  if (ierr != PR_ERR_NOERROR) {
+    printf("\n%s (%d)\n", ir_err_stringify(ierr), ierr);
+    exit(1);
+  }
+
+  printf("\n\nRESULT: ");
   nd_debug_tree_print(node_dst, 0, 100);
 
   fclose(pr.lx.rd.src);
 
   arena_dealloc(&default_arena);
-  printf("\nmemory deallocated!\n");
+  printf("\n\nmemory deallocated!\n");
 
   return 0;
 }
