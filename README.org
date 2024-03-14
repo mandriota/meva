@@ -1,7 +1,12 @@
 * (^◔ᴥ◔^) MEWA
 A simple Math EWAluator written on C.
 
-** (☞ﾟヮﾟ)☞ Naming Conventions
+** Currently supported featchers (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧
+- Basic arithmetic operators
+- Operators priority and associativity
+- Type inference
+
+** Naming Conventions ☜(ﾟヮﾟ☜)
 *** Constants, Enums, Defines
 All caps, snake case.
 
