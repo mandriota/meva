@@ -1,7 +1,7 @@
 * (^◔ᴥ◔^) Mewa
 A simple Math EWAluator written on C.
 
-** Naming Conventions
+** (☞ﾟヮﾟ)☞ Naming Conventions
 *** Constants, Enums, Defines
 All caps, snake case.
 
