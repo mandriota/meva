@@ -99,9 +99,9 @@ typedef struct String str_t;
 
 typedef long double flt_t;
 
-typedef uint64_t unt_t;
+typedef _BitInt(128) int_t;
 
-typedef int64_t int_t;
+typedef unsigned _BitInt(128) unt_t;
 
 union Primitive {
   str_t str;
@@ -437,7 +437,7 @@ void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
            node->as.pm.str.data, node->as.pm.str.len);
     return;
   case NT_PRIM_INT:
-    printf("value: %lld;", node->as.pm.n_int);
+    printf("value: %lld;", (long long)node->as.pm.n_int);
     return;
   case NT_PRIM_FLT:
     printf("value: %Lf;", node->as.pm.n_flt);
@@ -499,6 +499,8 @@ enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node);
 
 enum PR_ERR pr_next_add_sub_node(struct Parser *pr, struct Node **node);
 
+enum PR_ERR pr_next_neg_node(struct Parser *pr, struct Node **node);
+
 enum PR_ERR pr_next_let_node(struct Parser *pr, struct Node **node);
 
 enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
@@ -550,18 +552,32 @@ enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node) {
 
     lx_next_token(&pr->lx);
 
-    TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.b));
+    TRY(PR_ERR, pr_next_neg_node(pr, &(*node)->as.bp.b));
   } else
     **node = *(*node)->as.bp.a;
 
   return PR_ERR_NOERROR;
 }
 
+enum PR_ERR pr_next_neg_node(struct Parser *pr, struct Node **node) {
+  struct Node *node_tmp = *node;
+
+  if (pr->lx.tt == TT_SUB) {
+    node_tmp->type = NT_UNOP_NEG;
+    node_tmp->as.up.a =
+        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    node_tmp = node_tmp->as.up.a;
+    lx_next_token(&pr->lx);
+  }
+
+  return pr_next_pow_node(pr, &node_tmp);
+}
+
 enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.a));
+  TRY(PR_ERR, pr_next_neg_node(pr, &(*node)->as.bp.a));
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
@@ -570,7 +586,7 @@ enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_next_pow_node(pr, &(*node)->as.bp.b));
+    TRY(PR_ERR, pr_next_neg_node(pr, &(*node)->as.bp.b));
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
@@ -648,12 +664,16 @@ struct Interpreter;
 
 enum IR_ERR {
   IR_ERR_NOERROR,
+  IR_ERR_ILL_NT,
+  IR_ERR_INT_OR_FLT_ARG_EXPECTED,
   IR_ERR_DIV_BY_ZERO,
 };
 
 const char *ir_err_stringify(enum IR_ERR ir_err) {
   switch (ir_err) {
     STRINGIFY_CASE(IR_ERR_NOERROR)
+    STRINGIFY_CASE(IR_ERR_ILL_NT)
+    STRINGIFY_CASE(IR_ERR_INT_OR_FLT_ARG_EXPECTED)
     STRINGIFY_CASE(IR_ERR_DIV_BY_ZERO)
   }
 
@@ -661,6 +681,50 @@ const char *ir_err_stringify(enum IR_ERR ir_err) {
 }
 
 enum IR_ERR ir_exec(struct Node **dst, struct Node *src);
+
+enum IR_ERR ir_unop_exec_int(struct Node *dst, enum NodeType op,
+                             union Primitive a) {
+  dst->type = NT_PRIM_INT;
+
+  switch (op) {
+  case NT_UNOP_NEG:
+    dst->as.pm.n_int = -a.n_int;
+    break;
+  default:
+    return IR_ERR_ILL_NT;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
+enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
+                             union Primitive a) {
+  dst->type = NT_PRIM_FLT;
+
+  switch (op) {
+  case NT_UNOP_NEG:
+    dst->as.pm.n_flt = -a.n_flt;
+    break;
+  default:
+    return IR_ERR_ILL_NT;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
+enum IR_ERR ir_unop_exec(struct Node **dst, struct Node *src) {
+  TRY(IR_ERR, ir_exec(dst, src->as.up.a));
+  enum NodeType node_a_type = (*dst)->type;
+  union Primitive node_a_value = (*dst)->as.pm;
+
+  if (node_a_type == NT_PRIM_INT)
+    return ir_unop_exec_int(*dst, src->type, node_a_value);
+
+  if (node_a_type == NT_PRIM_FLT)
+    return ir_unop_exec_flt(*dst, src->type, node_a_value);
+
+  return IR_ERR_INT_OR_FLT_ARG_EXPECTED;
+}
 
 enum IR_ERR ir_biop_exec_int(struct Node *dst, enum NodeType op,
                              union Primitive a, union Primitive b) {
@@ -699,8 +763,7 @@ enum IR_ERR ir_biop_exec_int(struct Node *dst, enum NodeType op,
 
     break;
   default:
-    dst->as.pm.n_int = 0;
-    break;
+    return IR_ERR_ILL_NT;
   }
 
   return IR_ERR_NOERROR;
@@ -733,7 +796,7 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
     dst->as.pm.n_flt = powl(a.n_flt, b.n_flt);
     break;
   default:
-    break;
+    return IR_ERR_ILL_NT;
   }
 
   return IR_ERR_NOERROR;
@@ -775,9 +838,9 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
     *dst = src;
     break;
   case NT_UNOP_NEG:
-    break;
+    return ir_unop_exec(dst, src);
   default:
-    TRY(IR_ERR, ir_biop_exec(dst, src));
+    return ir_biop_exec(dst, src);
   }
 
   return IR_ERR_NOERROR;
@@ -825,6 +888,8 @@ int main(void) {
   }
 
   nd_debug_tree_print(node_p, 0, 100);
+
+  puts("");
 
   struct Node *node_dst = arena_acquire(&default_arena, sizeof(struct Node));
 

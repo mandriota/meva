@@ -1,4 +1,4 @@
-* Meva (Math Evaluator)
+* (^◔ᴥ◔^) Mewa (Math Ewaluator)
 A simple calculator written on C.
 
 ** Naming Conventions
