@@ -1,7 +1,7 @@
 # (=​｀ω´=) MEWA
 A simple Math EWAluator written on C.
 
-## Build from Source
+## Build from Source (;´ρ`)
 ```sh
 git clone https://github.com/mandriota/mewa
 cd mewa
