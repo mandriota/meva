@@ -4,5 +4,5 @@ CFLAGS := -std=c2x -fsanitize=address -fsanitize=undefined -fno-sanitize-recover
 run: build
 	./meva
 
-build: main.c arena.c
-	$(CC) $(CFLAGS) -o meva main.c arena.c
+build: mewa.c arena.c
+	$(CC) $(CFLAGS) -o mewa mewa.c arena.c
