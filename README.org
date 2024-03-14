@@ -1,4 +1,4 @@
-* (&#61;｀ω´&#61;) MEWA
+* <code>(=｀ω´=)</code> MEWA
 A simple Math EWAluator written on C.
 
 ** Currently supported featchers (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧
