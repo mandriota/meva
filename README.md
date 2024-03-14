@@ -23,7 +23,7 @@ Same as functions. First word is an abbreviation of struct name.
 
 ### Structs names abbreviations list
 | `Reader`      | `RD` |
-|+--------------|+-----|
+|:--------------|:-----|
 | `Token`       | `TK` |
 | `TokenType`   | `TT` |
 | `Lexer`       | `LX` |
