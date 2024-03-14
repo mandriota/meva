@@ -1,5 +1,5 @@
-* (^◔ᴥ◔^) Mewa (Math Ewaluator)
-A simple calculator written on C.
+* (^◔ᴥ◔^) Mewa
+A simple Math EWAluator written on C.
 
 ** Naming Conventions
 *** Constants, Enums, Defines
