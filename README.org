@@ -1,5 +1,5 @@
-* (\=｀ω´=) MEWA
-A simple Math EWAluator written on C.
+* MEWA
+A simple Math EWAluator written on C. (\=｀ω´\=)
 
 ** Currently supported featchers (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧
 - Basic arithmetic operators
