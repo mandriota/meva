@@ -35,7 +35,6 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -105,6 +104,34 @@ typedef _BitInt(128) int_t;
 
 typedef unsigned _BitInt(128) unt_t;
 
+#define INT_MAX ((int_t) (((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
+
+char * int_stringify(char * restrict dst, char *restrict dst_end, int_t n) {
+  char * p = dst_end+1;
+
+  if (n == 0) {
+    *--p = '0';
+    return p;
+  }
+
+  if (n < 0) {
+    *--p = '-';
+    n = -n;
+  }
+
+  while (n) {
+	if (p != dst)
+	  *--p = n%10 + '0';
+	else {
+	  fprintf(stderr, "buffer capacity is not enough");
+	  exit(1);
+	}
+	n /= 10;
+  }
+  
+  return p;
+}
+
 union Primitive {
   str_t str;
   flt_t n_flt;
@@ -157,7 +184,7 @@ void rd_next_page(struct Reader *restrict rd) {
   rd->page.str.len = fread(rd->page.str.data, 1, rd->page.cap, rd->src);
   if (ferror(rd->src)) {
     perror("cannot read file");
-    exit(2);
+    exit(1);
   }
   rd->eof = rd->page.str.len < rd->page.cap;
 }
@@ -259,8 +286,6 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
 
   int_t pow10 = 1;
 
-  const int_t limit = (((unt_t)1 << (sizeof(pow10) * 8 - 1)) - 1) / 10;
-
   bool overflow = false;
 
   char cc;
@@ -269,7 +294,7 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
     if (!overflow) {
       *mnt = *mnt * 10 + cc - '0';
       pow10 *= 10;
-      overflow = pow10 > limit;
+      overflow = pow10 > INT_MAX / 10;
     } else
       ++*exp; // TODO: add warning that right part of integer were ignored
 
@@ -311,7 +336,7 @@ void lx_read_symbol(struct Lexer *lx) {
       (char *)arena_acquire(&default_arena, lx->tk_opt.sb.cap);
   if (lx->tk_opt.sb.str.data == NULL) {
     perror("cannot allocate memory");
-    exit(3);
+    exit(1);
   }
 
   char cc;
@@ -438,8 +463,13 @@ void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
     printf("value: %*s (len: %zu);", (int)node->as.pm.str.len,
            node->as.pm.str.data, node->as.pm.str.len);
     return;
-  case NT_PRIM_INT:
-    printf("value: %lld;", (long long)node->as.pm.n_int);
+  case NT_PRIM_INT: {
+	char dst[64];
+	dst[63] = 0;
+
+	char * str = int_stringify(dst, &dst[62], node->as.pm.n_int);
+    printf("value: %s (len: %zu);", str, &dst[62]-str+1);
+  }
     return;
   case NT_PRIM_FLT:
     printf("value: %Lf;", node->as.pm.n_flt);
@@ -464,7 +494,7 @@ void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
 struct Parser {
   struct Lexer lx;
 
-  int_t p0c;
+  size_t p0c;
 };
 
 enum PR_ERR {
