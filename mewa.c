@@ -171,7 +171,7 @@ void rd_next_char(struct Reader *restrict rd) {
   ++rd->ptr;
 
   if (rd->ptr >= rd->page.str.len) {
-    if (rd->eof) {
+    if (rd->eof || rd->src == NULL) {
       rd->eos = true;
       return;
     }
