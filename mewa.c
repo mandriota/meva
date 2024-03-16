@@ -104,31 +104,33 @@ typedef _BitInt(128) int_t;
 
 typedef unsigned _BitInt(128) unt_t;
 
-#define INT_MAX ((int_t) (((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
+#define INT_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
-char * int_stringify(char * restrict dst, char *restrict dst_end, int_t n) {
-  char * p = dst_end+1;
+char *int_stringify(char *dst, char *dst_end, int_t n) {
+  char *p = dst_end + 1;
 
   if (n == 0) {
     *--p = '0';
     return p;
   }
 
-  if (n < 0) {
-    *--p = '-';
-    n = -n;
-  }
+  bool is_neg = n < 0;
+  if (is_neg)
+	n = -n;
 
   while (n) {
-	if (p != dst)
-	  *--p = n%10 + '0';
-	else {
-	  fprintf(stderr, "buffer capacity is not enough");
-	  exit(1);
-	}
-	n /= 10;
+    if (p != dst) {
+      *--p = n % 10 + '0';
+    } else {
+      fprintf(stderr, "buffer capacity is not enough");
+      exit(1);
+    }
+    n /= 10;
   }
-  
+
+  if (is_neg)
+    *--p = '-';
+
   return p;
 }
 
@@ -174,12 +176,12 @@ struct Reader {
   bool eos;
 };
 
-void rd_prev(struct Reader *restrict rd) {
+void rd_prev(struct Reader *rd) {
   if (rd->mrk != rd->ptr)
     --rd->ptr;
 }
 
-void rd_next_page(struct Reader *restrict rd) {
+void rd_next_page(struct Reader *rd) {
   rd->ptr = 0;
   rd->page.str.len = fread(rd->page.str.data, 1, rd->page.cap, rd->src);
   if (ferror(rd->src)) {
@@ -189,7 +191,7 @@ void rd_next_page(struct Reader *restrict rd) {
   rd->eof = rd->page.str.len < rd->page.cap;
 }
 
-void rd_next_char(struct Reader *restrict rd) {
+void rd_next_char(struct Reader *rd) {
   ++rd->col;
   if (rd->page.str.data[rd->ptr] == '\n') {
     rd->col = 0;
@@ -206,7 +208,7 @@ void rd_next_char(struct Reader *restrict rd) {
   }
 }
 
-void rd_skip_whitespaces(struct Reader *restrict rd) {
+void rd_skip_whitespaces(struct Reader *rd) {
   while (rd->ptr < rd->page.str.len &&
          IS_WHITESPACE(rd->page.str.data[rd->ptr]))
     rd_next_char(rd);
@@ -330,7 +332,7 @@ void lx_next_token_number(struct Lexer *lx) {
 void lx_read_symbol(struct Lexer *lx) {
   lx->tt = TT_SYM;
 
-  lx->tk_opt.sb.cap = 64;
+  lx->tk_opt.sb.cap = 8;
   lx->tk_opt.sb.str.len = 0;
   lx->tk_opt.sb.str.data =
       (char *)arena_acquire(&default_arena, lx->tk_opt.sb.cap);
@@ -464,11 +466,11 @@ void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
            node->as.pm.str.data, node->as.pm.str.len);
     return;
   case NT_PRIM_INT: {
-	char dst[64];
-	dst[63] = 0;
+    static char dst[40];
+    dst[sizeof dst - 1] = 0;
 
-	char * str = int_stringify(dst, &dst[62], node->as.pm.n_int);
-    printf("value: %s (len: %zu);", str, &dst[62]-str+1);
+    char *str = int_stringify(dst, &dst[sizeof dst - 2], node->as.pm.n_int);
+    printf("value: %s (len: %zu);", str, &dst[sizeof dst - 2] - str + 1);
   }
     return;
   case NT_PRIM_FLT:
