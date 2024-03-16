@@ -106,29 +106,25 @@ typedef unsigned _BitInt(128) unt_t;
 
 #define INT_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
-char *int_stringify(char *dst, char *dst_end, int_t n) {
+char *int_stringify(char *dst, char *dst_end, int_t num) {
   char *p = dst_end + 1;
+  int_t n = num;
 
   if (n == 0) {
     *--p = '0';
     return p;
   }
 
-  bool is_neg = n < 0;
-  if (is_neg)
-	n = -n;
-
   while (n) {
-    if (p != dst) {
-      *--p = n % 10 + '0';
-    } else {
+    if (p == dst) {
       fprintf(stderr, "buffer capacity is not enough");
       exit(1);
     }
+    *--p = (num < 0 ? -1 : 1) * (n % 10) + '0';
     n /= 10;
   }
 
-  if (is_neg)
+  if (num < 0)
     *--p = '-';
 
   return p;
@@ -923,7 +919,7 @@ int main(void) {
 
   nd_debug_tree_print(node_p, 0, 100);
 
-  puts("");
+  printf("\n");
 
   struct Node *node_dst = arena_acquire(&default_arena, sizeof(struct Node));
 
@@ -939,7 +935,8 @@ int main(void) {
   fclose(pr.lx.rd.src);
 
   arena_dealloc(&default_arena);
-  printf("\n\nmemory deallocated!\n");
+
+  printf("\n");
 
   return 0;
 }

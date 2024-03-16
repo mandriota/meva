@@ -1,5 +1,5 @@
 CC := clang
-CFLAGS := -std=c2x -g -Wall -Wextra -Werror -Wpedantic
+CFLAGS := -std=gnu2x -g -Wall -Wextra -Werror -Wpedantic
 
 run: build
 	./mewa
