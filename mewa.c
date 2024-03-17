@@ -147,7 +147,7 @@ int_t pow_int(int_t base, int_t expo) {
   while (expo > 0) {
     if (expo % 2 == 1)
       rt *= base;
-    expo >>= 1;
+    expo /= 2;
     base *= base;
   }
   return rt;
