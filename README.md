@@ -13,7 +13,10 @@ make build
 - [X] Operators priority and associativity
 - [X] Type inference
 - [ ] Functions
-- [ ] Variables
+- [ ] Function specialization
+- [ ] Function ranged specialization
+- [X] Command-line arguments and redirects handling
+- [X] REPL
 
 ## Naming Conventions ＿φ(￣ー￣ )
 ### Constants, Enums, Defines
@@ -39,5 +42,5 @@ Same as functions. First word is an abbreviation of struct name.
 | `Parser`      | `PR`         |
 | `Interpreter` | `IR`         |
 
-## Acknowledgements
+## Acknowledgements (￣ω￣;)
 - Thanks to [Giovanni Crisalfi](https://github.com/gicrisf) for [the kaomoji collection](https://github.com/gicrisf/kaomel) used in this file.

@@ -968,8 +968,7 @@ int _Noreturn repl(struct Parser *pr, struct Node **dst, struct Node **src) {
   }
 }
 
-// TODO: add pipeline and command line arguments handling
-int main(void) {
+int main(int argc, char *argv[]) {
   struct Parser pr = {
       .lx =
           {
@@ -995,15 +994,23 @@ int main(void) {
   struct Node *node_src_p = &node_src;
   struct Node *node_dst_p = &node_dst;
 
-  if (isatty(STDIN_FILENO))
+  if (isatty(STDIN_FILENO) && argc == 1)
     repl(&pr, &node_dst_p, &node_src_p);
-
-  pr.lx.rd.src = stdin;
 
   static struct Arena principal_arena = {.head = NULL};
 
-  pr.lx.rd.page.cap = 512;
-  pr.lx.rd.page.str.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
+  if (argc > 2)
+    FATAL("too many arguments\n");
+
+  if (argc == 2) {
+	pr.lx.rd.page.str.len = pr.lx.rd.page.cap = strlen(argv[1]);
+    pr.lx.rd.page.str.data = argv[1];
+  } else {
+    pr.lx.rd.src = stdin;
+
+    pr.lx.rd.page.cap = 512;
+    pr.lx.rd.page.str.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
+  }
 
   lx_next_token(&pr.lx);
   enum PR_ERR perr = pr_next_let_node(&pr, &node_src_p);
