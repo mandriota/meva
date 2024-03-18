@@ -37,6 +37,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 //=:util
@@ -46,6 +47,12 @@
 //    | | | | __| | |
 //    | |_| | |_| | |
 //     \__,_|\__|_|_|
+
+#ifdef DEBUG
+#define DEBUG_PRINT(...) fprintf(stderr, "DEBUG: " __VA_ARGS__)
+#else
+#define DEBUG_PRINT(...) /* Don't do anything in release builds */
+#endif
 
 #define IS_WHITESPACE(c)                                                       \
   (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
@@ -165,21 +172,41 @@ struct Reader {
   struct StringBuffer page;
   FILE *src;
   size_t ptr;
-  size_t row;
-  size_t col;
-  size_t mrk;
+  ssize_t row;
+  ssize_t col;
+  ssize_t mrk;
   bool eof;
   bool eos;
+  bool pin;
 };
 
+void rd_reset_counters(struct Reader *rd) {
+  rd->ptr = 0;
+  rd->row = 0;
+  rd->col = 0;
+  rd->mrk = 0;
+  rd->eof = false;
+  rd->eos = false;
+}
+
 void rd_prev(struct Reader *rd) {
-  if (rd->mrk != rd->ptr)
+  if (rd->mrk == -1 || (size_t)rd->mrk != rd->ptr)
     --rd->ptr;
 }
 
 void rd_next_page(struct Reader *rd) {
   rd->ptr = 0;
-  rd->page.str.len = fread(rd->page.str.data, 1, rd->page.cap, rd->src);
+  rd->mrk = -1;
+  if (rd->pin) {
+    rd->pin = false;
+    return;
+  }
+  if (rd->src == NULL) {
+    rd->eos = rd->eof = true;
+    return;
+  }
+  rd->page.str.len =
+      fread(rd->page.str.data, sizeof(char), rd->page.cap, rd->src);
   if (ferror(rd->src)) {
     perror("cannot read file");
     exit(1);
@@ -195,8 +222,8 @@ void rd_next_char(struct Reader *rd) {
   }
   ++rd->ptr;
 
-  if (rd->ptr >= rd->page.str.len) {
-    if (rd->eof || rd->src == NULL) {
+  if (rd->ptr >= rd->page.str.len || rd->pin) {
+    if (rd->eof) {
       rd->eos = true;
       return;
     }
@@ -373,7 +400,7 @@ void lx_next_token(struct Lexer *lx) {
     return;
   }
 
-  lx->rd.ptr = lx->rd.ptr;
+  lx->rd.mrk = lx->rd.ptr;
 
   if (IS_DIGIT(cc))
     lx_next_token_number(lx);
@@ -449,28 +476,29 @@ struct Node {
   } as;
 };
 
-void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
+void nd_tree_print(struct Node *node, int depth, int depth_max) {
   if (node == NULL || depth >= depth_max)
     return;
 
-  printf("\n%*s", depth * 2, ""); // indentation
-  printf("type: %s (%d); ", nt_stringify(node->type), node->type);
+  static char dst[40];
+
+  printf("%*s", depth * 2, ""); // indentation
+#ifdef DEBUG
+  printf("%s (%d) ", nt_stringify(node->type), node->type);
+#endif
 
   switch (node->type) {
   case NT_PRIM_SYM:
-    printf("value: %*s (len: %zu);", (int)node->as.pm.str.len,
-           node->as.pm.str.data, node->as.pm.str.len);
+    printf("%*s\n", (int)node->as.pm.str.len, node->as.pm.str.data);
     return;
-  case NT_PRIM_INT: {
-    static char dst[40];
+  case NT_PRIM_INT:
     dst[sizeof dst - 1] = 0;
 
     char *str = int_stringify(dst, &dst[sizeof dst - 2], node->as.pm.n_int);
-    printf("value: %s (len: %zu);", str, &dst[sizeof dst - 2] - str + 1);
-  }
+    printf("%s\n", str);
     return;
   case NT_PRIM_FLT:
-    printf("value: %Lf;", node->as.pm.n_flt);
+    printf("%Lf\n", node->as.pm.n_flt);
     return;
   case NT_BIOP_LET:
   case NT_BIOP_ADD:
@@ -479,11 +507,13 @@ void nd_debug_tree_print(struct Node *node, int depth, int depth_max) {
   case NT_BIOP_QUO:
   case NT_BIOP_MOD:
   case NT_BIOP_POW:
-    nd_debug_tree_print(node->as.bp.a, depth + 1, depth_max);
-    nd_debug_tree_print(node->as.bp.b, depth + 1, depth_max);
+	printf("\n");
+    nd_tree_print(node->as.bp.a, depth + 1, depth_max);
+    nd_tree_print(node->as.bp.b, depth + 1, depth_max);
     return;
   case NT_UNOP_NEG:
-    nd_debug_tree_print(node->as.bp.a, depth + 1, depth_max);
+	printf("\n");
+    nd_tree_print(node->as.bp.a, depth + 1, depth_max);
     return;
   }
 }
@@ -882,61 +912,106 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
 //    | |_| \__ \  __/ |
 //     \__,_|___/\___|_|
 
-int repl(void) { return 0; }
+int repl(struct Parser *pr, struct Node **dst, struct Node **src) {
+  while (true) {
+    rd_reset_counters(&pr->lx.rd);
+    pr->lx.rd.pin = true;
 
+    printf("> ");
+
+    ssize_t line_len =
+        getline(&pr->lx.rd.page.str.data, &pr->lx.rd.page.cap, stdin);
+    if (line_len == -1) {
+      printf("cannot read line\n");
+      exit(1);
+    }
+
+    pr->lx.rd.page.str.len = (size_t)line_len;
+
+    lx_next_token(&pr->lx);
+    enum PR_ERR perr = pr_next_let_node(pr, src);
+    if (perr != PR_ERR_NOERROR) {
+      printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr->lx.rd.row,
+             pr->lx.rd.col, pr_err_stringify(perr), perr,
+             tt_stringify(pr->lx.tt), pr->lx.tt);
+      continue;
+    }
+
+#ifdef DEBUG
+    nd_tree_print(*src, 0, 100);
+#endif
+
+    enum IR_ERR ierr = ir_exec(dst, *src);
+    if (ierr != PR_ERR_NOERROR) {
+      printf("\n%s (%d)\n", ir_err_stringify(ierr), ierr);
+      continue;
+    }
+
+    printf("\n= ");
+    nd_tree_print(*dst, 1, 101);
+
+    printf("\n");
+  }
+}
+
+// TODO: add pipeline and command line arguments handling
 int main(void) {
   struct Parser pr = {
       .lx =
           {
               .rd =
                   {
-                      .src = stdin,
+                      .src = NULL,
                       .page =
                           {
                               .str =
                                   {
-                                      .data = arena_acquire(&default_arena,
-                                                            getpagesize()),
+                                      .data = NULL,
                                       .len = 0,
                                   },
-                              .cap = getpagesize(),
+                              .cap = 0,
                           },
                   },
           },
+      .p0c = 0,
   };
 
-  struct Node node;
+  struct Node *node_src = arena_acquire(&default_arena, sizeof(struct Node));
+  struct Node *node_dst = arena_acquire(&default_arena, sizeof(struct Node));
 
-  struct Node *node_p = &node;
+  repl(&pr, &node_dst, &node_src);
+  return 0;
+
+  rd_reset_counters(&pr.lx.rd);
+
+  pr.lx.rd.page.str.data = arena_acquire(&default_arena, getpagesize());
+  pr.lx.rd.page.cap = getpagesize();
 
   lx_next_token(&pr.lx);
-  enum PR_ERR perr = pr_next_let_node(&pr, &node_p);
+
+  enum PR_ERR perr = pr_next_let_node(&pr, &node_src);
   if (perr != PR_ERR_NOERROR) {
     printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
            pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
     exit(1);
   }
 
-  nd_debug_tree_print(node_p, 0, 100);
+  nd_tree_print(node_src, 0, 100);
 
   printf("\n");
 
-  struct Node *node_dst = arena_acquire(&default_arena, sizeof(struct Node));
-
-  enum IR_ERR ierr = ir_exec(&node_dst, node_p);
+  enum IR_ERR ierr = ir_exec(&node_dst, node_src);
   if (ierr != PR_ERR_NOERROR) {
     printf("\n%s (%d)\n", ir_err_stringify(ierr), ierr);
     exit(1);
   }
 
   printf("\n\nRESULT: ");
-  nd_debug_tree_print(node_dst, 0, 100);
+  nd_tree_print(node_dst, 1, 101);
 
   fclose(pr.lx.rd.src);
 
   arena_dealloc(&default_arena);
-
-  printf("\n");
 
   return 0;
 }
