@@ -28,6 +28,9 @@
 *                                                                              *
 \******************************************************************************/
 
+#include <stdnoreturn.h>
+#define NDEBUG
+
 //=:includes
 #include "arena.h"
 
@@ -48,11 +51,17 @@
 //    | |_| | |_| | |
 //     \__,_|\__|_|_|
 
-#ifdef DEBUG
-#define DEBUG_PRINT(...) fprintf(stderr, "DEBUG: " __VA_ARGS__)
+#ifdef NDEBUG
+#define DBG_PRINT(...)
 #else
-#define DEBUG_PRINT(...) /* Don't do anything in release builds */
+#define DBG_PRINT(...) fprintf(stderr, "INFO: " __VA_ARGS__)
 #endif
+
+#define FATAL(...)                                                             \
+  {                                                                            \
+    fprintf(stderr, "FATAL: " __VA_ARGS__);                                    \
+    exit(1);                                                                   \
+  }
 
 #define IS_WHITESPACE(c)                                                       \
   (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
@@ -114,6 +123,8 @@ typedef unsigned _BitInt(128) unt_t;
 #define INT_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
 char *int_stringify(char *dst, char *dst_end, int_t num) {
+  assert(dst_end >= dst);
+
   char *p = dst_end + 1;
   int_t n = num;
 
@@ -123,10 +134,9 @@ char *int_stringify(char *dst, char *dst_end, int_t num) {
   }
 
   while (n) {
-    if (p == dst) {
-      fprintf(stderr, "buffer capacity is not enough");
-      exit(1);
-    }
+    if (p == dst)
+      FATAL("buffer capacity is not enough\n");
+
     *--p = (num < 0 ? -1 : 1) * (n % 10) + '0';
     n /= 10;
   }
@@ -170,14 +180,17 @@ int_t pow_int(int_t base, int_t expo) {
 
 struct Reader {
   struct StringBuffer page;
+
   FILE *src;
+
   size_t ptr;
   ssize_t row;
   ssize_t col;
   ssize_t mrk;
+
   bool eof;
   bool eos;
-  bool pin;
+  bool eoi;
 };
 
 void rd_reset_counters(struct Reader *rd) {
@@ -187,6 +200,7 @@ void rd_reset_counters(struct Reader *rd) {
   rd->mrk = 0;
   rd->eof = false;
   rd->eos = false;
+  rd->eoi = false;
 }
 
 void rd_prev(struct Reader *rd) {
@@ -197,20 +211,17 @@ void rd_prev(struct Reader *rd) {
 void rd_next_page(struct Reader *rd) {
   rd->ptr = 0;
   rd->mrk = -1;
-  if (rd->pin) {
-    rd->pin = false;
-    return;
-  }
+
   if (rd->src == NULL) {
-    rd->eos = rd->eof = true;
+    rd->eos = rd->eof = rd->eoi;
     return;
   }
+
   rd->page.str.len =
       fread(rd->page.str.data, sizeof(char), rd->page.cap, rd->src);
-  if (ferror(rd->src)) {
-    perror("cannot read file");
-    exit(1);
-  }
+  if (ferror(rd->src))
+    FATAL("cannot read file\n");
+
   rd->eof = rd->page.str.len < rd->page.cap;
 }
 
@@ -222,12 +233,13 @@ void rd_next_char(struct Reader *rd) {
   }
   ++rd->ptr;
 
-  if (rd->ptr >= rd->page.str.len || rd->pin) {
+  if (rd->ptr >= rd->page.str.len || (rd->src == NULL && !rd->eoi)) {
     if (rd->eof) {
       rd->eos = true;
       return;
     }
     rd_next_page(rd);
+    rd->eoi = true;
   }
 }
 
@@ -359,10 +371,8 @@ void lx_read_symbol(struct Lexer *lx) {
   lx->tk_opt.sb.str.len = 0;
   lx->tk_opt.sb.str.data =
       (char *)arena_acquire(&default_arena, lx->tk_opt.sb.cap);
-  if (lx->tk_opt.sb.str.data == NULL) {
-    perror("cannot allocate memory");
-    exit(1);
-  }
+  if (lx->tk_opt.sb.str.data == NULL)
+    FATAL("cannot allocate memory\n");
 
   char cc;
   while (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
@@ -483,7 +493,7 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   static char dst[40];
 
   printf("%*s", depth * 2, ""); // indentation
-#ifdef DEBUG
+#ifndef NDEBUG
   printf("%s (%d) ", nt_stringify(node->type), node->type);
 #endif
 
@@ -507,12 +517,12 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   case NT_BIOP_QUO:
   case NT_BIOP_MOD:
   case NT_BIOP_POW:
-	printf("\n");
+    printf("\n");
     nd_tree_print(node->as.bp.a, depth + 1, depth_max);
     nd_tree_print(node->as.bp.b, depth + 1, depth_max);
     return;
   case NT_UNOP_NEG:
-	printf("\n");
+    printf("\n");
     nd_tree_print(node->as.bp.a, depth + 1, depth_max);
     return;
   }
@@ -913,18 +923,19 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
 //     \__,_|___/\___|_|
 
 int repl(struct Parser *pr, struct Node **dst, struct Node **src) {
-  while (true) {
-    rd_reset_counters(&pr->lx.rd);
-    pr->lx.rd.pin = true;
+  DBG_PRINT("starting REPL...\n");
 
-    printf("> ");
+  while (true) {
+    arena_dealloc(&default_arena);
+
+    rd_reset_counters(&pr->lx.rd);
+
+    printf("? ");
 
     ssize_t line_len =
         getline(&pr->lx.rd.page.str.data, &pr->lx.rd.page.cap, stdin);
-    if (line_len == -1) {
-      printf("cannot read line\n");
-      exit(1);
-    }
+    if (line_len == -1)
+      FATAL("cannot read line\n");
 
     pr->lx.rd.page.str.len = (size_t)line_len;
 
@@ -937,7 +948,7 @@ int repl(struct Parser *pr, struct Node **dst, struct Node **src) {
       continue;
     }
 
-#ifdef DEBUG
+#ifndef NDEBUG
     nd_tree_print(*src, 0, 100);
 #endif
 
@@ -975,43 +986,43 @@ int main(void) {
           },
       .p0c = 0,
   };
-
-  struct Node *node_src = arena_acquire(&default_arena, sizeof(struct Node));
-  struct Node *node_dst = arena_acquire(&default_arena, sizeof(struct Node));
-
-  repl(&pr, &node_dst, &node_src);
-  return 0;
-
   rd_reset_counters(&pr.lx.rd);
 
-  pr.lx.rd.page.str.data = arena_acquire(&default_arena, getpagesize());
-  pr.lx.rd.page.cap = getpagesize();
+  struct Node node_src, node_dst;
+  struct Node *node_src_p = &node_src;
+  struct Node *node_dst_p = &node_dst;
+
+  if (isatty(STDIN_FILENO))
+    repl(&pr, &node_dst_p, &node_src_p);
+
+  pr.lx.rd.src = stdin;
+
+  static struct Arena principal_arena = {.head = NULL};
+
+  pr.lx.rd.page.cap = 512;
+  pr.lx.rd.page.str.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
 
   lx_next_token(&pr.lx);
+  enum PR_ERR perr = pr_next_let_node(&pr, &node_src_p);
+  if (perr != PR_ERR_NOERROR)
+    FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
+          pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
 
-  enum PR_ERR perr = pr_next_let_node(&pr, &node_src);
-  if (perr != PR_ERR_NOERROR) {
-    printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
-           pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
-    exit(1);
-  }
+#ifndef NDEBUG
+  nd_tree_print(node_src_p, 0, 100);
+#endif
 
-  nd_tree_print(node_src, 0, 100);
+  enum IR_ERR ierr = ir_exec(&node_dst_p, node_src_p);
+  if (ierr != PR_ERR_NOERROR)
+    FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
-  printf("\n");
-
-  enum IR_ERR ierr = ir_exec(&node_dst, node_src);
-  if (ierr != PR_ERR_NOERROR) {
-    printf("\n%s (%d)\n", ir_err_stringify(ierr), ierr);
-    exit(1);
-  }
-
-  printf("\n\nRESULT: ");
-  nd_tree_print(node_dst, 1, 101);
+  printf("= ");
+  nd_tree_print(node_dst_p, 1, 101);
 
   fclose(pr.lx.rd.src);
 
   arena_dealloc(&default_arena);
+  arena_dealloc(&principal_arena);
 
   return 0;
 }

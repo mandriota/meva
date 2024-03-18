@@ -1,5 +1,5 @@
 CC := clang
-CFLAGS := -std=gnu2x -g -Wall -Wextra -Werror -Wpedantic
+CFLAGS := -std=c2x -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment -g -Wall -Wextra -Werror -Wpedantic
 
 run: build
 	./mewa
