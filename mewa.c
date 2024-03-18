@@ -28,7 +28,6 @@
 *                                                                              *
 \******************************************************************************/
 
-#include <stdnoreturn.h>
 #define NDEBUG
 
 //=:includes
@@ -188,6 +187,8 @@ struct Reader {
   ssize_t col;
   ssize_t mrk;
 
+  bool prv;
+
   bool eof;
   bool eos;
   bool eoi;
@@ -204,8 +205,7 @@ void rd_reset_counters(struct Reader *rd) {
 }
 
 void rd_prev(struct Reader *rd) {
-  if (rd->mrk == -1 || (size_t)rd->mrk != rd->ptr)
-    --rd->ptr;
+  rd->prv = rd->mrk == -1 || (size_t)rd->mrk != rd->ptr;
 }
 
 void rd_next_page(struct Reader *rd) {
@@ -226,6 +226,11 @@ void rd_next_page(struct Reader *rd) {
 }
 
 void rd_next_char(struct Reader *rd) {
+  if (rd->prv) {
+    rd->prv = false;
+    return;
+  }
+
   ++rd->col;
   if (rd->page.str.data[rd->ptr] == '\n') {
     rd->col = 0;
@@ -922,9 +927,7 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
 //    | |_| \__ \  __/ |
 //     \__,_|___/\___|_|
 
-int repl(struct Parser *pr, struct Node **dst, struct Node **src) {
-  DBG_PRINT("starting REPL...\n");
-
+int _Noreturn repl(struct Parser *pr, struct Node **dst, struct Node **src) {
   while (true) {
     arena_dealloc(&default_arena);
 
