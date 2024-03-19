@@ -195,12 +195,9 @@ struct Reader {
 };
 
 void rd_reset_counters(struct Reader *rd) {
-  rd->ptr = 0;
-  rd->row = 0;
-  rd->col = 0;
-  rd->mrk = 0;
-  rd->eof = false;
-  rd->eos = false;
+  rd->ptr = rd->mrk = 0;
+  rd->row = rd->col = 0;
+  rd->eof = rd->eos = false;
   rd->eoi = false;
 }
 
@@ -568,17 +565,13 @@ const char *pr_err_stringify(enum PR_ERR pr_err) {
   return STRINGIFY(INVALID_PR_ERR);
 }
 
-enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node);
+enum PR_ERR pr_rl_unop_node(struct Parser *pr, struct Node **node,
+                            int priority);
 
-enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node);
+enum PR_ERR pr_call(struct Parser *pr, struct Node **node, int priority);
 
-enum PR_ERR pr_next_add_sub_node(struct Parser *pr, struct Node **node);
-
-enum PR_ERR pr_next_neg_node(struct Parser *pr, struct Node **node);
-
-enum PR_ERR pr_next_let_node(struct Parser *pr, struct Node **node);
-
-enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
+enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
+                                   int priority) {
   switch (pr->lx.tt) {
   case TT_ILL:
     return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
@@ -602,7 +595,7 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
   case TT_LP0:
     ++pr->p0c;
     lx_next_token(&pr->lx);
-    return pr_next_let_node(pr, node);
+    return pr_call(pr, node, priority);
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
   case TT_EOX:
@@ -614,30 +607,28 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node) {
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_next_pow_node(struct Parser *pr, struct Node **node) {
-  (*node)->as.bp.a =
-      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+bool pr_includes_tt(enum TokenType tt, int priority) {
+  switch (priority / 10) {
+  case 0:
+    return tt == TT_LET;
+  case 1:
+    return tt == TT_ADD || tt == TT_SUB;
+  case 2:
+    return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
+  case 3:
+    return tt == TT_SUB;
+  case 4:
+    return tt == TT_POW;
+  }
 
-  TRY(PR_ERR, pr_next_primitive_node(pr, &(*node)->as.bp.a));
-
-  if (pr->lx.tt == TT_POW) {
-    (*node)->as.bp.b =
-        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node)->type = (enum NodeType)pr->lx.tt;
-
-    lx_next_token(&pr->lx);
-
-    TRY(PR_ERR, pr_next_neg_node(pr, &(*node)->as.bp.b));
-  } else
-    **node = *(*node)->as.bp.a;
-
-  return PR_ERR_NOERROR;
+  FATAL("unknown priority: %d\n", priority);
 }
 
-enum PR_ERR pr_next_neg_node(struct Parser *pr, struct Node **node) {
+enum PR_ERR pr_rl_unop_node(struct Parser *pr, struct Node **node,
+                            int priority) {
   struct Node *node_tmp = *node;
 
-  if (pr->lx.tt == TT_SUB) {
+  if (pr_includes_tt(pr->lx.tt, priority)) {
     node_tmp->type = NT_UNOP_NEG;
     node_tmp->as.up.a =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
@@ -645,23 +636,55 @@ enum PR_ERR pr_next_neg_node(struct Parser *pr, struct Node **node) {
     lx_next_token(&pr->lx);
   }
 
-  return pr_next_pow_node(pr, &node_tmp);
+  return pr_call(pr, &node_tmp, priority);
 }
 
-enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
+enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
+                                 int priority);
+
+enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
+                                 int priority);
+
+enum PR_ERR pr_call(struct Parser *pr, struct Node **node, int priority) {
+  switch (priority) {
+  case 00: // LET 1
+    return pr_lr_biop_next_node(pr, node, 10);
+  case 01: // LET 2
+    return pr_rl_biop_next_node(pr, node, 00);
+  case 10: // ADD / SUB 1
+  case 11: // ADD / SUB 2
+    return pr_lr_biop_next_node(pr, node, 20);
+  case 20: // MUL / QUO / MOD 1
+  case 21: // MUL / QUO / MOD 2
+    return pr_rl_unop_node(pr, node, 30);
+  case 30: // NEG
+    return pr_rl_biop_next_node(pr, node, 40);
+  case 40: // POW 1
+    return pr_next_primitive_node(pr, node, 50);
+  case 41: // POW 2
+    return pr_rl_unop_node(pr, node, 30);
+  case 50: // PRIMITIVE
+    return pr_lr_biop_next_node(pr, node, 00);
+  }
+
+  FATAL("unknown priority: %d\n", priority);
+}
+
+enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
+                                 int priority) {
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  TRY(PR_ERR, pr_next_neg_node(pr, &(*node)->as.bp.a));
+  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, priority));
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
-  while (pr->lx.tt == TT_MUL || pr->lx.tt == TT_QUO || pr->lx.tt == TT_MOD) {
+  while (pr_includes_tt(pr->lx.tt, priority)) {
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_next_neg_node(pr, &(*node)->as.bp.b));
+    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, priority + 1));
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
@@ -673,53 +696,35 @@ enum PR_ERR pr_next_mul_quo_mod_node(struct Parser *pr, struct Node **node) {
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_next_add_sub_node(struct Parser *pr, struct Node **node) {
+enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
+                                 int priority) {
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  TRY(PR_ERR, pr_next_mul_quo_mod_node(pr, &(*node)->as.bp.a));
+  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, priority));
 
-  struct Node *node_tmp = (*node)->as.bp.a;
-
-  while (pr->lx.tt == TT_ADD || pr->lx.tt == TT_SUB) {
-    (*node)->type = (enum NodeType)pr->lx.tt;
-    (*node)->as.bp.b =
-        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_next_mul_quo_mod_node(pr, &(*node)->as.bp.b));
-
-    node_tmp = *node;
-    *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node)->as.bp.a = node_tmp;
-  }
-
-  *node = node_tmp;
-
-  return PR_ERR_NOERROR;
-}
-
-enum PR_ERR pr_next_let_node(struct Parser *pr, struct Node **node) {
-  (*node)->as.bp.a =
-      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-
-  TRY(PR_ERR, pr_next_add_sub_node(pr, &(*node)->as.bp.a));
-
-  if (pr->lx.tt == TT_LET) {
+  if (pr_includes_tt(pr->lx.tt, priority)) {
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->type = (enum NodeType)pr->lx.tt;
 
     lx_next_token(&pr->lx);
 
-    TRY(PR_ERR, pr_next_let_node(pr, &(*node)->as.bp.b));
+    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, priority + 1));
   } else
     **node = *(*node)->as.bp.a;
 
+  return PR_ERR_NOERROR;
+}
+
+enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
+  TRY(PR_ERR, pr_call(pr, node, 00));
+
   if (pr->lx.tt == TT_RP0) {
-    if (--pr->p0c >= 0)
-      lx_next_token(&pr->lx);
-    else
+    if (--pr->p0c < 0)
       return PR_ERR_PAREN_NOT_OPENED;
+
+    lx_next_token(&pr->lx);
   }
 
   return PR_ERR_NOERROR;
@@ -927,11 +932,17 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
 //    | |_| \__ \  __/ |
 //     \__,_|___/\___|_|
 
-int _Noreturn repl(struct Parser *pr, struct Node **dst, struct Node **src) {
+static struct Node ast_source;
+static struct Node ast_result;
+
+int _Noreturn repl(struct Parser *pr) {
   while (true) {
-    arena_dealloc(&default_arena);
+    arena_reset(&default_arena);
 
     rd_reset_counters(&pr->lx.rd);
+
+	struct Node *src = &ast_source;
+	struct Node *dst = &ast_result;
 
     printf("? ");
 
@@ -943,7 +954,7 @@ int _Noreturn repl(struct Parser *pr, struct Node **dst, struct Node **src) {
     pr->lx.rd.page.str.len = (size_t)line_len;
 
     lx_next_token(&pr->lx);
-    enum PR_ERR perr = pr_next_let_node(pr, src);
+    enum PR_ERR perr = pr_next_node(pr, &src);
     if (perr != PR_ERR_NOERROR) {
       printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr->lx.rd.row,
              pr->lx.rd.col, pr_err_stringify(perr), perr,
@@ -952,17 +963,17 @@ int _Noreturn repl(struct Parser *pr, struct Node **dst, struct Node **src) {
     }
 
 #ifndef NDEBUG
-    nd_tree_print(*src, 0, 100);
+    nd_tree_print(src, 0, 100);
 #endif
 
-    enum IR_ERR ierr = ir_exec(dst, *src);
+    enum IR_ERR ierr = ir_exec(&dst, src);
     if (ierr != PR_ERR_NOERROR) {
       printf("\n%s (%d)\n", ir_err_stringify(ierr), ierr);
       continue;
     }
 
     printf("\n= ");
-    nd_tree_print(*dst, 1, 101);
+    nd_tree_print(dst, 1, 101);
 
     printf("\n");
   }
@@ -990,12 +1001,11 @@ int main(int argc, char *argv[]) {
   };
   rd_reset_counters(&pr.lx.rd);
 
-  struct Node node_src, node_dst;
-  struct Node *node_src_p = &node_src;
-  struct Node *node_dst_p = &node_dst;
+  struct Node *src = &ast_source;
+  struct Node *dst = &ast_result;
 
   if (isatty(STDIN_FILENO) && argc == 1)
-    repl(&pr, &node_dst_p, &node_src_p);
+    repl(&pr);
 
   static struct Arena principal_arena = {.head = NULL};
 
@@ -1003,7 +1013,7 @@ int main(int argc, char *argv[]) {
     FATAL("too many arguments\n");
 
   if (argc == 2) {
-	pr.lx.rd.page.str.len = pr.lx.rd.page.cap = strlen(argv[1]);
+    pr.lx.rd.page.str.len = pr.lx.rd.page.cap = strlen(argv[1]);
     pr.lx.rd.page.str.data = argv[1];
   } else {
     pr.lx.rd.src = stdin;
@@ -1013,21 +1023,21 @@ int main(int argc, char *argv[]) {
   }
 
   lx_next_token(&pr.lx);
-  enum PR_ERR perr = pr_next_let_node(&pr, &node_src_p);
+  enum PR_ERR perr = pr_next_node(&pr, &src);
   if (perr != PR_ERR_NOERROR)
     FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
           pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
 
 #ifndef NDEBUG
-  nd_tree_print(node_src_p, 0, 100);
+  nd_tree_print(src, 0, 100);
 #endif
 
-  enum IR_ERR ierr = ir_exec(&node_dst_p, node_src_p);
+  enum IR_ERR ierr = ir_exec(&dst, src);
   if (ierr != PR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
   printf("= ");
-  nd_tree_print(node_dst_p, 1, 101);
+  nd_tree_print(dst, 1, 101);
 
   fclose(pr.lx.rd.src);
 
