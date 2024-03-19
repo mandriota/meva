@@ -22,7 +22,6 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <sys/mman.h>
 
 size_t align(size_t sz) {
   return sz + (sizeof sz - ((sz - 1) & (sizeof sz - 1))) - 1;
@@ -43,18 +42,14 @@ struct Chunk *chunk_alloc(size_t sz) {
   size_t sz_aligned = align(sz);
   size_t total = sz_aligned + sizeof(struct Chunk);
 
-  struct Chunk *chunk = (struct Chunk *)mmap(
-      NULL, total, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-  assert(chunk != MAP_FAILED);
+  struct Chunk *chunk = (struct Chunk *)malloc(total);
+  assert(chunk != NULL);
 
+  chunk->next = NULL;
   chunk->size = sz_aligned / sizeof(chunk->data[0]);
   chunk->used = true;
 
   return chunk;
-}
-
-void chunk_dealloc(struct Chunk *chunk) {
-  assert(munmap(chunk, chunk->size + sizeof(struct Chunk)) == 0);
 }
 
 void *arena_acquire(struct Arena *arena, size_t sz) {
@@ -106,7 +101,7 @@ void arena_dealloc(struct Arena *arena) {
 
   while (chunk != NULL) {
     next_chunk = chunk->next;
-    chunk_dealloc(chunk);
+    free(chunk);
     chunk = next_chunk;
   }
 
