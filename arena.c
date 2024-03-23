@@ -29,10 +29,10 @@ size_t align(size_t sz) {
 
 struct Chunk {
   struct Chunk *next;
-  size_t size;
 
   bool used;
 
+  size_t size;
   size_t data[];
 };
 
@@ -61,8 +61,9 @@ void *arena_acquire(struct Arena *arena, size_t sz) {
   struct Chunk *chunk = arena->head;
 
   while ((chunk->used || chunk->size * sizeof(size_t) < sz) &&
-         chunk->next != NULL)
+         chunk->next != NULL) {
     chunk = chunk->next;
+  }
 
   if (!chunk->used) {
     chunk->used = true;

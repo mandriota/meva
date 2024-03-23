@@ -31,15 +31,18 @@ All script, snake case.
 ### Methods
 Same as functions. First word is an abbreviation of struct name.
 
-### Structs names abbreviations list
+### Names abbreviations list
 | Name          | Abbreviation |
 |:--------------|:-------------|
+| `Primitive`   | `PM`         |
 | `Reader`      | `RD`         |
 | `Token`       | `TK`         |
 | `TokenType`   | `TT`         |
 | `Lexer`       | `LX`         |
+| `Node`        | `ND`         |
 | `NodeType`    | `NT`         |
 | `Parser`      | `PR`         |
+| `Priority`    | `PT`         |
 | `Interpreter` | `IR`         |
 
 ## Acknowledgements (￣ω￣;)

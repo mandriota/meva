@@ -28,9 +28,16 @@
 *                                                                              *
 \******************************************************************************/
 
-#define NDEBUG
-
 //=:includes
+//     _            _           _
+//    (_)          | |         | |
+//     _ _ __   ___| |_   _  __| | ___  ___
+//    | | '_ \ / __| | | | |/ _` |/ _ \/ __|
+//    | | | | | (__| | |_| | (_| |  __/\__ \
+//    |_|_| |_|\___|_|\__,_|\__,_|\___||___/
+
+#include "config.h"
+
 #include "arena.h"
 
 #include <assert.h>
@@ -50,30 +57,35 @@
 //    | |_| | |_| | |
 //     \__,_|\__|_|_|
 
-#ifdef NDEBUG
-#define DBG_PRINT(...)
+//=:util:colors
+#define ESC "\x1b"
+
+#ifndef NCOLORS
+#define CRESET ESC "[39;49m"
+#define CBRED ESC "[1;31m"
+#define CBGRN ESC "[1;32m"
+#define CBYEL ESC "[1;33m"
+#define CBBLU ESC "[1;34m"
+#define CBMAG ESC "[1;35m"
+#define CBCYN ESC "[1;36m"
 #else
-#define DBG_PRINT(...) fprintf(stderr, "INFO: " __VA_ARGS__)
+#define CRESET
+#define CBRED
+#define CBGRN
+#define CBYEL
+#define CBBLU
+#define CBMAG
+#define CBCYN
 #endif
 
+//=:util:error_handling
 #define FATAL(...)                                                             \
   {                                                                            \
-    fprintf(stderr, "FATAL: " __VA_ARGS__);                                    \
+    fprintf(stderr, CBRED "FATAL" CRESET ": " __VA_ARGS__);                    \
     exit(1);                                                                   \
   }
 
-#define IS_WHITESPACE(c)                                                       \
-  (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
-
-#define IS_LETTER(c) (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_')
-
-#define IS_DIGIT(c) (c >= '0' && c <= '9')
-
-#define STRINGIFY(name) #name
-
-#define STRINGIFY_CASE(name)                                                   \
-  case name:                                                                   \
-    return STRINGIFY(name);
+#define ERROR(...) fprintf(stderr, CBRED "ERROR" CRESET ": " __VA_ARGS__)
 
 #define TRY(prefix, expr)                                                      \
   {                                                                            \
@@ -82,24 +94,100 @@
       return err;                                                              \
   }
 
+//=:util:debug
+#ifdef NDEBUG
+#define DBG_PRINT(...)
+#define DBG_FATAL(...)
+#define DBG(x)
+#else
+#define DBG_PRINT(...) fprintf(stderr, CBBLU "INFO" CRESET ": " __VA_ARGS__)
+#define DBG_FATAL(...) FATAL(__VA_ARGS__)
+#define DBG(x) x
+#endif
+
+//=:util:other
+#define STRINGIFY(name) #name
+
+#define STRINGIFY_CASE(name)                                                   \
+  case name:                                                                   \
+    return STRINGIFY(name);
+
+//=:util:ascii
+#define IS_WHITESPACE(c)                                                       \
+  (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
+
+#define IS_LOWER(c) (c >= 'a' && c <= 'z')
+
+#define IS_UPPER(c) (c >= 'A' && c <= 'Z')
+
+#define IS_LETTER(c) (IS_LOWER(c) || IS_UPPER(c) || c == '_')
+
+#define IS_DIGIT(c) (c >= '0' && c <= '9')
+
+//=:util:globals
 static struct Arena default_arena = {.head = NULL};
 
-struct String {
-  char *data;
-  size_t len;
-};
+//=:util:data_structures
 
 struct StringBuffer {
-  struct String str;
+  char *data;
+  size_t len;
   size_t cap;
 };
 
-void sb_push_char(struct StringBuffer *sb, char cc) {
-  if (sb->str.len >= sb->cap)
-    sb->str.data = arena_reacquire(&default_arena, sb->str.data,
-                                   sb->cap * 2 + sb->cap == 0);
+//=:util:types
+typedef long double flt_t;
 
-  sb->str.data[sb->str.len++] = cc;
+typedef _BitInt(128) int_t;
+
+typedef unsigned _BitInt(128) unt_t;
+
+#define INT_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
+
+#define ENC_OFF ('Z' - 'A' + 1)
+
+//=:util:encoding
+unt_t encode_symbol_c(char c) {
+  if (IS_UPPER(c))
+    return (c - 'A') + 1;
+  if (IS_LOWER(c))
+    return (c - 'a') + ENC_OFF + 1;
+  if (c == '_')
+    return ENC_OFF * 2 + 1;
+  if (IS_DIGIT(c))
+    return (c - '0') + ENC_OFF * 2 + 2;
+
+  DBG_FATAL("symbol's character (%d) is out of range", c);
+  return 0;
+}
+
+char decode_symbol_c(char c) {
+  if (c >= 1 && c <= ENC_OFF)
+    return (c + 'A') - 1;
+  if (c >= ENC_OFF + 1 && c <= ENC_OFF * 2)
+    return (c + 'a') - ENC_OFF - 1;
+  if (c == ENC_OFF * 2 + 1)
+    return '_';
+  if (c >= ENC_OFF * 2 + 2 && c <= ENC_OFF * 2 + 12)
+    return (c + '0') - ENC_OFF * 2 - 2;
+
+  DBG_FATAL("symbol's character (%d) is out of range", c);
+  return 0;
+}
+
+char *decode_symbol(char *dst, char *dst_end, unt_t src) {
+  char *p, c;
+
+  for (p = dst; src && p < dst_end; ++p) {
+    c = src & ((1 << 6) - 1);
+    *p = decode_symbol_c(c);
+    src >>= 6;
+  }
+
+  if (src != 0)
+    FATAL("buffer capacity is not enough\n");
+
+  return p;
 }
 
 //=:runtime
@@ -109,17 +197,6 @@ void sb_push_char(struct StringBuffer *sb, char cc) {
 //    | '__| | | | '_ \| __| | '_ ` _ \ / _	\
 //    | |  | |_| | | | | |_| | | | | | |  __/
 //    |_|   \__,_|_| |_|\__|_|_| |_| |_|\___|
-
-//=:runtime:types
-typedef struct String str_t;
-
-typedef long double flt_t;
-
-typedef _BitInt(128) int_t;
-
-typedef unsigned _BitInt(128) unt_t;
-
-#define INT_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
 char *int_stringify(char *dst, char *dst_end, int_t num) {
   assert(dst_end >= dst);
@@ -147,9 +224,9 @@ char *int_stringify(char *dst, char *dst_end, int_t num) {
 }
 
 union Primitive {
-  str_t str;
   flt_t n_flt;
   int_t n_int;
+  unt_t n_unt;
 };
 
 //=:runtime:operators
@@ -214,12 +291,11 @@ void rd_next_page(struct Reader *rd) {
     return;
   }
 
-  rd->page.str.len =
-      fread(rd->page.str.data, sizeof(char), rd->page.cap, rd->src);
+  rd->page.len = fread(rd->page.data, sizeof(char), rd->page.cap, rd->src);
   if (ferror(rd->src))
     FATAL("cannot read file\n");
 
-  rd->eof = rd->page.str.len < rd->page.cap;
+  rd->eof = rd->page.len < rd->page.cap;
 }
 
 void rd_next_char(struct Reader *rd) {
@@ -229,14 +305,14 @@ void rd_next_char(struct Reader *rd) {
   }
 
   ++rd->col;
-  if (rd->page.str.data[rd->ptr] == '\n') {
+  if (rd->page.data[rd->ptr] == '\n') {
     rd->col = 0;
     ++rd->row;
   }
   ++rd->ptr;
 
-  if (rd->ptr >= rd->page.str.len || (rd->src == NULL && !rd->eoi)) {
-    if (rd->eof) {
+  if (rd->ptr >= rd->page.len || (rd->src == NULL && !rd->eoi)) {
+    if (rd->eof || (rd->src == NULL && rd->eoi)) {
       rd->eos = true;
       return;
     }
@@ -246,8 +322,7 @@ void rd_next_char(struct Reader *rd) {
 }
 
 void rd_skip_whitespaces(struct Reader *rd) {
-  while (rd->ptr < rd->page.str.len &&
-         IS_WHITESPACE(rd->page.str.data[rd->ptr]))
+  while (rd->ptr < rd->page.len && IS_WHITESPACE(rd->page.data[rd->ptr]))
     rd_next_char(rd);
 }
 
@@ -312,11 +387,7 @@ struct Lexer {
   struct Reader rd;
 
   enum TokenType tt;
-
-  union {
-    struct StringBuffer sb;
-    union Primitive pv;
-  } tk_opt;
+  union Primitive pm;
 };
 
 int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
@@ -328,8 +399,8 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
   bool overflow = false;
 
   char cc;
-  while (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
-         IS_DIGIT((cc = lx->rd.page.str.data[lx->rd.ptr]))) {
+  while (!(lx->rd.eos || lx->rd.page.len == 0) &&
+         IS_DIGIT((cc = lx->rd.page.data[lx->rd.ptr]))) {
     if (!overflow) {
       *mnt = *mnt * 10 + cc - '0';
       pow10 *= 10;
@@ -349,18 +420,18 @@ void lx_next_token_number(struct Lexer *lx) {
   int_t mnt, exp;
   lx_read_integer(lx, &mnt, &exp);
 
-  lx->tk_opt.pv.n_flt = (flt_t)mnt * powl(10, exp);
+  lx->pm.n_flt = (flt_t)mnt * powl(10, exp);
 
   char cc;
-  if (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
-      (cc = lx->rd.page.str.data[lx->rd.ptr]) == '.') {
+  if (!(lx->rd.eos || lx->rd.page.len == 0) &&
+      (cc = lx->rd.page.data[lx->rd.ptr]) == '.') {
 
     rd_next_char(&lx->rd);
     int_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
-    lx->tk_opt.pv.n_flt += (flt_t)mnt / decimal_log10;
+    lx->pm.n_flt += (flt_t)mnt / decimal_log10;
   } else if (exp == 0) {
     lx->tt = TT_INT;
-    lx->tk_opt.pv.n_int = mnt;
+    lx->pm.n_int = mnt;
   }
 
   rd_prev(&lx->rd);
@@ -368,18 +439,15 @@ void lx_next_token_number(struct Lexer *lx) {
 
 void lx_read_symbol(struct Lexer *lx) {
   lx->tt = TT_SYM;
+  lx->pm.n_int = 0;
 
-  lx->tk_opt.sb.cap = 8;
-  lx->tk_opt.sb.str.len = 0;
-  lx->tk_opt.sb.str.data =
-      (char *)arena_acquire(&default_arena, lx->tk_opt.sb.cap);
-  if (lx->tk_opt.sb.str.data == NULL)
-    FATAL("cannot allocate memory\n");
+  int bit_off = 0;
 
   char cc;
-  while (!(lx->rd.eos || lx->rd.page.str.len == 0) &&
-         IS_LETTER((cc = lx->rd.page.str.data[lx->rd.ptr]))) {
-    sb_push_char(&lx->tk_opt.sb, cc);
+  while (!(lx->rd.eos || lx->rd.page.len == 0) &&
+         (IS_LETTER((cc = lx->rd.page.data[lx->rd.ptr])) || IS_DIGIT(cc))) {
+    lx->pm.n_unt |= encode_symbol_c(cc) << bit_off;
+    bit_off += 6;
     rd_next_char(&lx->rd);
   }
 
@@ -387,7 +455,7 @@ void lx_read_symbol(struct Lexer *lx) {
 }
 
 void lx_next_token(struct Lexer *lx) {
-  if (lx->rd.eos || (lx->rd.eof && lx->rd.page.str.len == 0)) {
+  if (lx->rd.eos || (lx->rd.eof && lx->rd.page.len == 0)) {
     lx->tt = TT_EOS;
     return;
   }
@@ -395,7 +463,8 @@ void lx_next_token(struct Lexer *lx) {
   rd_next_char(&lx->rd);
   rd_skip_whitespaces(&lx->rd);
 
-  char cc = lx->rd.page.str.data[lx->rd.ptr];
+  char cc = lx->rd.page.data[lx->rd.ptr];
+
   switch (cc) {
   case TT_LET:
   case TT_ADD:
@@ -414,11 +483,11 @@ void lx_next_token(struct Lexer *lx) {
 
   lx->rd.mrk = lx->rd.ptr;
 
-  if (IS_DIGIT(cc))
+  if (IS_DIGIT(cc)) {
     lx_next_token_number(lx);
-  else if (IS_LETTER(cc))
+  } else if (IS_LETTER(cc)) {
     lx_read_symbol(lx);
-  else
+  } else
     lx->tt = TT_ILL;
 }
 
@@ -492,25 +561,28 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   if (node == NULL || depth >= depth_max)
     return;
 
-  static char dst[40];
+  static char dst[48];
+  char *str;
 
   printf("%*s", depth * 2, ""); // indentation
 #ifndef NDEBUG
-  printf("%s (%d) ", nt_stringify(node->type), node->type);
+  printf(CBMAG "%s" CRESET " (%d) ", nt_stringify(node->type), node->type);
 #endif
 
   switch (node->type) {
   case NT_PRIM_SYM:
-    printf("%*s\n", (int)node->as.pm.str.len, node->as.pm.str.data);
+    str = decode_symbol(dst, &dst[sizeof dst - 1], node->as.pm.n_unt);
+    *str = 0;
+    printf(CBCYN "%s" CRESET "\n", dst);
     return;
   case NT_PRIM_INT:
     dst[sizeof dst - 1] = 0;
 
-    char *str = int_stringify(dst, &dst[sizeof dst - 2], node->as.pm.n_int);
-    printf("%s\n", str);
+    str = int_stringify(dst, &dst[sizeof dst - 2], node->as.pm.n_int);
+    printf(CBCYN "%s" CRESET "\n", str);
     return;
   case NT_PRIM_FLT:
-    printf("%Lf\n", node->as.pm.n_flt);
+    printf(CBCYN "%Lf\n" CRESET, node->as.pm.n_flt);
     return;
   case NT_BIOP_LET:
   case NT_BIOP_ADD:
@@ -565,13 +637,77 @@ const char *pr_err_stringify(enum PR_ERR pr_err) {
   return STRINGIFY(INVALID_PR_ERR);
 }
 
-enum PR_ERR pr_rl_unop_node(struct Parser *pr, struct Node **node,
-                            int priority);
+enum Priority {
+  PT_SKIP_RP0,
+  PT_LET0,
+  PT_LET1,
+  PT_ADD_SUB,
+  PT_MUL_QUO_MOD,
+  PT_NEG,
+  PT_POW0,
+  PT_POW1,
+  PT_PRIM,
+};
 
-enum PR_ERR pr_call(struct Parser *pr, struct Node **node, int priority);
+enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
+                                 enum Priority pt);
+
+enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
+                                 enum Priority pt);
+
+enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
+                                 enum Priority pt);
+
+enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
+                        enum Priority pt);
 
 enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
-                                   int priority) {
+                                   enum Priority pt);
+
+bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
+  switch (pt) {
+  case PT_LET0:
+  case PT_LET1:
+    return tt == TT_LET;
+  case PT_ADD_SUB:
+    return tt == TT_ADD || tt == TT_SUB;
+  case PT_MUL_QUO_MOD:
+    return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
+  case PT_POW0:
+  case PT_POW1:
+    return tt == TT_POW;
+  default:
+    FATAL("%s: unknown priority: %d\n", __func__, pt);
+  }
+}
+
+enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
+  switch (pt) {
+  case PT_SKIP_RP0:
+    return pr_lr_biop_next_node(pr, node, PT_LET0);
+  case PT_LET0:
+    return pr_lr_biop_next_node(pr, node, PT_ADD_SUB);
+  case PT_LET1:
+    return pr_rl_biop_next_node(pr, node, PT_LET0);
+  case PT_ADD_SUB:
+    return pr_lr_biop_next_node(pr, node, PT_MUL_QUO_MOD);
+  case PT_MUL_QUO_MOD:
+    return pr_rl_unop_next_node(pr, node, PT_NEG);
+  case PT_NEG:
+    return pr_rl_biop_next_node(pr, node, PT_POW0);
+  case PT_POW0:
+    return pr_next_primitive_node(pr, node, PT_PRIM);
+  case PT_POW1:
+    return pr_rl_unop_next_node(pr, node, PT_NEG);
+  case PT_PRIM:
+    return pr_skip_rp0(pr, node, PT_SKIP_RP0);
+  }
+
+  FATAL("%s: unknown priority: %d\n", __func__, pt);
+}
+
+enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
+                                   enum Priority pt) {
   switch (pr->lx.tt) {
   case TT_ILL:
     return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
@@ -579,23 +715,23 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
     return PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED;
   case TT_SYM:
     (*node)->type = NT_PRIM_SYM;
-    (*node)->as.pm.str = pr->lx.tk_opt.pv.str;
+    (*node)->as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
     break;
   case TT_INT:
     (*node)->type = NT_PRIM_INT;
-    (*node)->as.pm.n_int = pr->lx.tk_opt.pv.n_int;
+    (*node)->as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
     break;
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
-    (*node)->as.pm.n_flt = pr->lx.tk_opt.pv.n_flt;
+    (*node)->as.pm.n_flt = pr->lx.pm.n_flt;
     lx_next_token(&pr->lx);
     break;
   case TT_LP0:
     ++pr->p0c;
     lx_next_token(&pr->lx);
-    return pr_call(pr, node, priority);
+    return pr_call(pr, node, pt);
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
   case TT_EOX:
@@ -607,28 +743,11 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
   return PR_ERR_NOERROR;
 }
 
-bool pr_includes_tt(enum TokenType tt, int priority) {
-  switch (priority / 10) {
-  case 0:
-    return tt == TT_LET;
-  case 1:
-    return tt == TT_ADD || tt == TT_SUB;
-  case 2:
-    return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
-  case 3:
-    return tt == TT_SUB;
-  case 4:
-    return tt == TT_POW;
-  }
-
-  FATAL("unknown priority: %d\n", priority);
-}
-
-enum PR_ERR pr_rl_unop_node(struct Parser *pr, struct Node **node,
-                            int priority) {
+enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
+                                 enum Priority pt) {
   struct Node *node_tmp = *node;
 
-  if (pr_includes_tt(pr->lx.tt, priority)) {
+  if (pr->lx.tt == TT_SUB) {
     node_tmp->type = NT_UNOP_NEG;
     node_tmp->as.up.a =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
@@ -636,55 +755,24 @@ enum PR_ERR pr_rl_unop_node(struct Parser *pr, struct Node **node,
     lx_next_token(&pr->lx);
   }
 
-  return pr_call(pr, &node_tmp, priority);
+  return pr_call(pr, &node_tmp, pt);
 }
 
 enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
-                                 int priority);
-
-enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
-                                 int priority);
-
-enum PR_ERR pr_call(struct Parser *pr, struct Node **node, int priority) {
-  switch (priority) {
-  case 00: // LET 1
-    return pr_lr_biop_next_node(pr, node, 10);
-  case 01: // LET 2
-    return pr_rl_biop_next_node(pr, node, 00);
-  case 10: // ADD / SUB 1
-  case 11: // ADD / SUB 2
-    return pr_lr_biop_next_node(pr, node, 20);
-  case 20: // MUL / QUO / MOD 1
-  case 21: // MUL / QUO / MOD 2
-    return pr_rl_unop_node(pr, node, 30);
-  case 30: // NEG
-    return pr_rl_biop_next_node(pr, node, 40);
-  case 40: // POW 1
-    return pr_next_primitive_node(pr, node, 50);
-  case 41: // POW 2
-    return pr_rl_unop_node(pr, node, 30);
-  case 50: // PRIMITIVE
-    return pr_lr_biop_next_node(pr, node, 00);
-  }
-
-  FATAL("unknown priority: %d\n", priority);
-}
-
-enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
-                                 int priority) {
+                                 enum Priority pt) {
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, priority));
+  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
-  while (pr_includes_tt(pr->lx.tt, priority)) {
+  while (pr_includes_tt(pr->lx.tt, pt)) {
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, priority + 1));
+    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
@@ -697,28 +785,29 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
 }
 
 enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
-                                 int priority) {
+                                 enum Priority pt) {
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, priority));
+  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
 
-  if (pr_includes_tt(pr->lx.tt, priority)) {
+  if (pr_includes_tt(pr->lx.tt, pt)) {
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->type = (enum NodeType)pr->lx.tt;
 
     lx_next_token(&pr->lx);
 
-    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, priority + 1));
+    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
   } else
     **node = *(*node)->as.bp.a;
 
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
-  TRY(PR_ERR, pr_call(pr, node, 00));
+enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
+                        enum Priority pt) {
+  TRY(PR_ERR, pr_call(pr, node, pt));
 
   if (pr->lx.tt == TT_RP0) {
     if (--pr->p0c < 0)
@@ -726,6 +815,13 @@ enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
 
     lx_next_token(&pr->lx);
   }
+
+  return PR_ERR_NOERROR;
+}
+
+enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
+  lx_next_token(&pr->lx);
+  TRY(PR_ERR, pr_call(pr, node, 00));
 
   return PR_ERR_NOERROR;
 }
@@ -941,24 +1037,24 @@ int _Noreturn repl(struct Parser *pr) {
 
     rd_reset_counters(&pr->lx.rd);
 
-	struct Node *src = &ast_source;
-	struct Node *dst = &ast_result;
+    struct Node *src = &ast_source;
+    struct Node *dst = &ast_result;
 
     printf("? ");
 
     ssize_t line_len =
-        getline(&pr->lx.rd.page.str.data, &pr->lx.rd.page.cap, stdin);
+        getline(&pr->lx.rd.page.data, &pr->lx.rd.page.cap, stdin);
     if (line_len == -1)
       FATAL("cannot read line\n");
 
-    pr->lx.rd.page.str.len = (size_t)line_len;
+    pr->lx.rd.page.len = (size_t)line_len;
 
-    lx_next_token(&pr->lx);
     enum PR_ERR perr = pr_next_node(pr, &src);
     if (perr != PR_ERR_NOERROR) {
-      printf("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr->lx.rd.row,
-             pr->lx.rd.col, pr_err_stringify(perr), perr,
-             tt_stringify(pr->lx.tt), pr->lx.tt);
+      ERROR("%zu:%zu: " CBMAG "%s" CRESET " (%d) [token: " CBMAG "%s" CRESET
+            " (%d)]\n",
+            pr->lx.rd.row, pr->lx.rd.col, pr_err_stringify(perr), perr,
+            tt_stringify(pr->lx.tt), pr->lx.tt);
       continue;
     }
 
@@ -968,7 +1064,7 @@ int _Noreturn repl(struct Parser *pr) {
 
     enum IR_ERR ierr = ir_exec(&dst, src);
     if (ierr != PR_ERR_NOERROR) {
-      printf("\n%s (%d)\n", ir_err_stringify(ierr), ierr);
+      ERROR(CBMAG "%s" CRESET " (%d)\n", ir_err_stringify(ierr), ierr);
       continue;
     }
 
@@ -988,11 +1084,8 @@ int main(int argc, char *argv[]) {
                       .src = NULL,
                       .page =
                           {
-                              .str =
-                                  {
-                                      .data = NULL,
-                                      .len = 0,
-                                  },
+                              .data = NULL,
+                              .len = 0,
                               .cap = 0,
                           },
                   },
@@ -1013,16 +1106,15 @@ int main(int argc, char *argv[]) {
     FATAL("too many arguments\n");
 
   if (argc == 2) {
-    pr.lx.rd.page.str.len = pr.lx.rd.page.cap = strlen(argv[1]);
-    pr.lx.rd.page.str.data = argv[1];
+    pr.lx.rd.page.len = pr.lx.rd.page.cap = strlen(argv[1]);
+    pr.lx.rd.page.data = argv[1];
   } else {
     pr.lx.rd.src = stdin;
 
     pr.lx.rd.page.cap = 512;
-    pr.lx.rd.page.str.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
+    pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
   }
 
-  lx_next_token(&pr.lx);
   enum PR_ERR perr = pr_next_node(&pr, &src);
   if (perr != PR_ERR_NOERROR)
     FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
