@@ -49,6 +49,11 @@
 #include <string.h>
 #include <unistd.h>
 
+//=:config:invariant
+#if INTERNAL_READING_BUF_SIZE < 1
+#error INTERNAL_READING_BUF_SIZE must be at least 1
+#endif
+
 //=:util
 //           _   _ _
 //          | | (_) |
@@ -57,35 +62,21 @@
 //    | |_| | |_| | |
 //     \__,_|\__|_|_|
 
-//=:util:colors
-#define ESC "\x1b"
-
-#ifndef NCOLORS
-#define CRESET ESC "[39;49m"
-#define CBRED ESC "[1;31m"
-#define CBGRN ESC "[1;32m"
-#define CBYEL ESC "[1;33m"
-#define CBBLU ESC "[1;34m"
-#define CBMAG ESC "[1;35m"
-#define CBCYN ESC "[1;36m"
-#else
-#define CRESET
-#define CBRED
-#define CBGRN
-#define CBYEL
-#define CBBLU
-#define CBMAG
-#define CBCYN
-#endif
-
 //=:util:error_handling
 #define FATAL(...)                                                             \
   {                                                                            \
-    fprintf(stderr, CBRED "FATAL" CRESET ": " __VA_ARGS__);                    \
-    exit(1);                                                                   \
+    fprintf(stderr, CLR_ERR_MSG "FATAL" CLR_RESET ": " __VA_ARGS__);           \
+    exit(EXIT_FAILURE);                                                        \
   }
 
-#define ERROR(...) fprintf(stderr, CBRED "ERROR" CRESET ": " __VA_ARGS__)
+#define PFATAL(s)                                                              \
+  {                                                                            \
+    perror(s);                                                                 \
+    exit(EXIT_FAILURE);                                                        \
+  }
+
+#define ERROR(...)                                                             \
+  fprintf(stderr, CLR_ERR_MSG "ERROR" CLR_RESET ": " __VA_ARGS__)
 
 #define TRY(prefix, expr)                                                      \
   {                                                                            \
@@ -100,7 +91,8 @@
 #define DBG_FATAL(...)
 #define DBG(x)
 #else
-#define DBG_PRINT(...) fprintf(stderr, CBBLU "INFO" CRESET ": " __VA_ARGS__)
+#define DBG_PRINT(...)                                                         \
+  fprintf(stderr, CLR_INF_MSG "INFO" CLR_RESET ": " __VA_ARGS__)
 #define DBG_FATAL(...) FATAL(__VA_ARGS__)
 #define DBG(x) x
 #endif
@@ -113,8 +105,7 @@
     return STRINGIFY(name);
 
 //=:util:ascii
-#define IS_WHITESPACE(c)                                                       \
-  (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
+#define IS_WHITESPACE(c) (c == ' ' || c == '\t' || c == '\v' || c == '\r')
 
 #define IS_LOWER(c) (c >= 'a' && c <= 'z')
 
@@ -128,7 +119,6 @@
 static struct Arena default_arena = {.head = NULL};
 
 //=:util:data_structures
-
 struct StringBuffer {
   char *data;
   size_t len;
@@ -264,6 +254,8 @@ struct Reader {
   ssize_t col;
   ssize_t mrk;
 
+  char cc;
+
   bool prv;
 
   bool eof;
@@ -293,9 +285,11 @@ void rd_next_page(struct Reader *rd) {
 
   rd->page.len = fread(rd->page.data, sizeof(char), rd->page.cap, rd->src);
   if (ferror(rd->src))
-    FATAL("cannot read file\n");
+    PFATAL("cannot read file\n");
 
   rd->eof = rd->page.len < rd->page.cap;
+  if ((rd->eos = !rd->page.len))
+	rd->cc = '\0';
 }
 
 void rd_next_char(struct Reader *rd) {
@@ -314,17 +308,25 @@ void rd_next_char(struct Reader *rd) {
   if (rd->ptr >= rd->page.len || (rd->src == NULL && !rd->eoi)) {
     if (rd->eof || (rd->src == NULL && rd->eoi)) {
       rd->eos = true;
+      rd->cc = '\0';
       return;
     }
     rd_next_page(rd);
     rd->eoi = true;
   }
+
+  rd->cc = rd->page.data[rd->ptr];
 }
 
-void rd_skip_whitespaces(struct Reader *rd) {
-  while (rd->ptr < rd->page.len && IS_WHITESPACE(rd->page.data[rd->ptr]))
+void rd_skip_whitespaces(struct Reader *rd, bool newline) {
+  while ((IS_WHITESPACE(rd->cc)) || (newline && rd->cc == '\n'))
     rd_next_char(rd);
 }
+
+void rd_skip_line(struct Reader *rd) {
+  while (rd->cc != '\0' && rd->cc != '\n')
+	rd_next_char(rd);
+}  
 
 //=:lexer
 //     _
@@ -388,6 +390,8 @@ struct Lexer {
 
   enum TokenType tt;
   union Primitive pm;
+
+  bool repl;
 };
 
 int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
@@ -398,11 +402,9 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
 
   bool overflow = false;
 
-  char cc;
-  while (!(lx->rd.eos || lx->rd.page.len == 0) &&
-         IS_DIGIT((cc = lx->rd.page.data[lx->rd.ptr]))) {
+  while (IS_DIGIT(lx->rd.cc)) {
     if (!overflow) {
-      *mnt = *mnt * 10 + cc - '0';
+      *mnt = *mnt * 10 + lx->rd.cc - '0';
       pow10 *= 10;
       overflow = pow10 > INT_MAX / 10;
     } else
@@ -422,10 +424,7 @@ void lx_next_token_number(struct Lexer *lx) {
 
   lx->pm.n_flt = (flt_t)mnt * powl(10, exp);
 
-  char cc;
-  if (!(lx->rd.eos || lx->rd.page.len == 0) &&
-      (cc = lx->rd.page.data[lx->rd.ptr]) == '.') {
-
+  if (lx->rd.cc == '.') {
     rd_next_char(&lx->rd);
     int_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
     lx->pm.n_flt += (flt_t)mnt / decimal_log10;
@@ -443,10 +442,8 @@ void lx_read_symbol(struct Lexer *lx) {
 
   int bit_off = 0;
 
-  char cc;
-  while (!(lx->rd.eos || lx->rd.page.len == 0) &&
-         (IS_LETTER((cc = lx->rd.page.data[lx->rd.ptr])) || IS_DIGIT(cc))) {
-    lx->pm.n_unt |= encode_symbol_c(cc) << bit_off;
+  while (IS_LETTER(lx->rd.cc) || IS_DIGIT(lx->rd.cc)) {
+    lx->pm.n_unt |= encode_symbol_c(lx->rd.cc) << bit_off;
     bit_off += 6;
     rd_next_char(&lx->rd);
   }
@@ -454,18 +451,14 @@ void lx_read_symbol(struct Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-void lx_next_token(struct Lexer *lx) {
-  if (lx->rd.eos || (lx->rd.eof && lx->rd.page.len == 0)) {
+void lx_next_token(struct Lexer *lx, bool force) {
+  rd_next_char(&lx->rd);
+  rd_skip_whitespaces(&lx->rd, force || !lx->repl);
+
+  switch (lx->rd.cc) {
+  case '\n':
     lx->tt = TT_EOS;
     return;
-  }
-
-  rd_next_char(&lx->rd);
-  rd_skip_whitespaces(&lx->rd);
-
-  char cc = lx->rd.page.data[lx->rd.ptr];
-
-  switch (cc) {
   case TT_LET:
   case TT_ADD:
   case TT_SUB:
@@ -477,15 +470,15 @@ void lx_next_token(struct Lexer *lx) {
   case TT_RP0:
   case TT_EOX:
   case TT_EOS:
-    lx->tt = cc;
+    lx->tt = lx->rd.cc;
     return;
   }
 
   lx->rd.mrk = lx->rd.ptr;
 
-  if (IS_DIGIT(cc)) {
+  if (IS_DIGIT(lx->rd.cc)) {
     lx_next_token_number(lx);
-  } else if (IS_LETTER(cc)) {
+  } else if (IS_LETTER(lx->rd.cc)) {
     lx_read_symbol(lx);
   } else
     lx->tt = TT_ILL;
@@ -566,23 +559,24 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
 
   printf("%*s", depth * 2, ""); // indentation
 #ifndef NDEBUG
-  printf(CBMAG "%s" CRESET " (%d) ", nt_stringify(node->type), node->type);
+  printf(CLR_INTERNAL "%s" CLR_RESET " (%d) ", nt_stringify(node->type),
+         node->type);
 #endif
 
   switch (node->type) {
   case NT_PRIM_SYM:
     str = decode_symbol(dst, &dst[sizeof dst - 1], node->as.pm.n_unt);
     *str = 0;
-    printf(CBCYN "%s" CRESET "\n", dst);
+    printf(CLR_PRIM "%s" CLR_RESET "\n", dst);
     return;
   case NT_PRIM_INT:
     dst[sizeof dst - 1] = 0;
 
     str = int_stringify(dst, &dst[sizeof dst - 2], node->as.pm.n_int);
-    printf(CBCYN "%s" CRESET "\n", str);
+    printf(CLR_PRIM "%s" CLR_RESET "\n", str);
     return;
   case NT_PRIM_FLT:
-    printf(CBCYN "%Lf\n" CRESET, node->as.pm.n_flt);
+    printf(CLR_PRIM "%Lf\n" CLR_RESET, node->as.pm.n_flt);
     return;
   case NT_BIOP_LET:
   case NT_BIOP_ADD:
@@ -677,7 +671,8 @@ bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
   case PT_POW1:
     return tt == TT_POW;
   default:
-    FATAL("%s: unknown priority: %d\n", __func__, pt);
+    DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
+    return false;
   }
 }
 
@@ -703,7 +698,8 @@ enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
     return pr_skip_rp0(pr, node, PT_SKIP_RP0);
   }
 
-  FATAL("%s: unknown priority: %d\n", __func__, pt);
+  DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
+  return false;
 }
 
 enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
@@ -716,21 +712,21 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
   case TT_SYM:
     (*node)->type = NT_PRIM_SYM;
     (*node)->as.pm.n_int = pr->lx.pm.n_int;
-    lx_next_token(&pr->lx);
+    lx_next_token(&pr->lx, false);
     break;
   case TT_INT:
     (*node)->type = NT_PRIM_INT;
     (*node)->as.pm.n_int = pr->lx.pm.n_int;
-    lx_next_token(&pr->lx);
+    lx_next_token(&pr->lx, false);
     break;
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
     (*node)->as.pm.n_flt = pr->lx.pm.n_flt;
-    lx_next_token(&pr->lx);
+    lx_next_token(&pr->lx, false);
     break;
   case TT_LP0:
     ++pr->p0c;
-    lx_next_token(&pr->lx);
+    lx_next_token(&pr->lx, true);
     return pr_call(pr, node, pt);
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
@@ -752,7 +748,7 @@ enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
     node_tmp->as.up.a =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     node_tmp = node_tmp->as.up.a;
-    lx_next_token(&pr->lx);
+    lx_next_token(&pr->lx, true);
   }
 
   return pr_call(pr, &node_tmp, pt);
@@ -771,8 +767,8 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
+    lx_next_token(&pr->lx, true);
+    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
@@ -796,7 +792,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->type = (enum NodeType)pr->lx.tt;
 
-    lx_next_token(&pr->lx);
+    lx_next_token(&pr->lx, true);
 
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
   } else
@@ -813,14 +809,14 @@ enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
     if (--pr->p0c < 0)
       return PR_ERR_PAREN_NOT_OPENED;
 
-    lx_next_token(&pr->lx);
+    lx_next_token(&pr->lx, false);
   }
 
   return PR_ERR_NOERROR;
 }
 
 enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
-  lx_next_token(&pr->lx);
+  lx_next_token(&pr->lx, false);
   TRY(PR_ERR, pr_call(pr, node, 00));
 
   return PR_ERR_NOERROR;
@@ -1031,7 +1027,7 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
 static struct Node ast_source;
 static struct Node ast_result;
 
-int _Noreturn repl(struct Parser *pr) {
+void _Noreturn repl(struct Parser *pr) {
   while (true) {
     arena_reset(&default_arena);
 
@@ -1040,38 +1036,35 @@ int _Noreturn repl(struct Parser *pr) {
     struct Node *src = &ast_source;
     struct Node *dst = &ast_result;
 
-    printf("? ");
-
-    ssize_t line_len =
-        getline(&pr->lx.rd.page.data, &pr->lx.rd.page.cap, stdin);
-    if (line_len == -1)
-      FATAL("cannot read line\n");
-
-    pr->lx.rd.page.len = (size_t)line_len;
+    printf(REPL_PROMPT);
 
     enum PR_ERR perr = pr_next_node(pr, &src);
     if (perr != PR_ERR_NOERROR) {
-      ERROR("%zu:%zu: " CBMAG "%s" CRESET " (%d) [token: " CBMAG "%s" CRESET
-            " (%d)]\n",
+      ERROR("%zu:%zu: " CLR_INTERNAL "%s" CLR_RESET
+            " (%d) [token: " CLR_INTERNAL "%s" CLR_RESET " (%d)]\n",
             pr->lx.rd.row, pr->lx.rd.col, pr_err_stringify(perr), perr,
             tt_stringify(pr->lx.tt), pr->lx.tt);
+	  rd_skip_line(&pr->lx.rd);
       continue;
     }
 
 #ifndef NDEBUG
-    nd_tree_print(src, 0, 100);
+    nd_tree_print(src, SOURCE_INDENTATION,
+                  SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
     enum IR_ERR ierr = ir_exec(&dst, src);
     if (ierr != PR_ERR_NOERROR) {
-      ERROR(CBMAG "%s" CRESET " (%d)\n", ir_err_stringify(ierr), ierr);
+      ERROR(CLR_INTERNAL "%s" CLR_RESET " (%d)\n", ir_err_stringify(ierr),
+            ierr);
       continue;
     }
 
-    printf("\n= ");
-    nd_tree_print(dst, 1, 101);
+    printf(REPL_RESULT_PREFIX);
+    nd_tree_print(dst, RESULT_INDENTATION,
+                  RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
-    printf("\n");
+    printf(REPL_RESULT_SUFFIX);
   }
 }
 
@@ -1081,7 +1074,7 @@ int main(int argc, char *argv[]) {
           {
               .rd =
                   {
-                      .src = NULL,
+                      .src = stdin,
                       .page =
                           {
                               .data = NULL,
@@ -1097,21 +1090,26 @@ int main(int argc, char *argv[]) {
   struct Node *src = &ast_source;
   struct Node *dst = &ast_result;
 
-  if (isatty(STDIN_FILENO) && argc == 1)
-    repl(&pr);
-
   static struct Arena principal_arena = {.head = NULL};
+
+  if (isatty(STDIN_FILENO) && argc == 1) {
+    pr.lx.repl = true;
+
+    pr.lx.rd.page.cap = 1;
+    pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
+    repl(&pr);
+  }
 
   if (argc > 2)
     FATAL("too many arguments\n");
 
   if (argc == 2) {
+    pr.lx.rd.src = stdin;
+
     pr.lx.rd.page.len = pr.lx.rd.page.cap = strlen(argv[1]);
     pr.lx.rd.page.data = argv[1];
   } else {
-    pr.lx.rd.src = stdin;
-
-    pr.lx.rd.page.cap = 512;
+    pr.lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
     pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
   }
 
@@ -1121,20 +1119,21 @@ int main(int argc, char *argv[]) {
           pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
 
 #ifndef NDEBUG
-  nd_tree_print(src, 0, 100);
+  nd_tree_print(src, SOURCE_INDENTATION, SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
   enum IR_ERR ierr = ir_exec(&dst, src);
   if (ierr != PR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
-  printf("= ");
-  nd_tree_print(dst, 1, 101);
+  printf(PIPE_RESULT_PREFIX);
+  nd_tree_print(dst, RESULT_INDENTATION, RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
+  printf(PIPE_RESULT_SUFFIX);
   fclose(pr.lx.rd.src);
 
   arena_dealloc(&default_arena);
   arena_dealloc(&principal_arena);
 
-  return 0;
+  return EXIT_SUCCESS;
 }
