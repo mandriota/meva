@@ -96,6 +96,6 @@
 
 //=:config:internal
 // must be at least 1
-#define INTERNAL_READING_BUF_SIZE 1
+#define INTERNAL_READING_BUF_SIZE 512
 
 
