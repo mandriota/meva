@@ -9,14 +9,15 @@ make build
 ```
 
 ## Featchers (。・・)_且
-- [X] Basic arithmetic operators
-- [X] Operators priority and associativity
-- [X] Type inference
+- [x] Basic arithmetic operators
+- [x] Operators priority and associativity
+- [x] Type inference
 - [ ] Functions
 - [ ] Function specialization
 - [ ] Function ranged specialization
-- [X] Command-line arguments and redirects handling
-- [X] REPL
+- [x] Command-line arguments and redirects handling
+- [x] REPL
+- [x] REPL: multiline input
 
 ## Naming Conventions ＿φ(￣ー￣ )
 ### Constants, Enums, Defines
