@@ -88,6 +88,8 @@
 //=:config:repl
 #define REPL_PROMPT "? "
 
+#define REPL_MULTILINE_PROMPT "... "
+
 #define REPL_RESULT_PREFIX "\n" PIPE_RESULT_PREFIX
 
 #define REPL_RESULT_SUFFIX "\n"

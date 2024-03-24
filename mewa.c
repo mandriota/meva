@@ -261,6 +261,8 @@ struct Reader {
   bool eof;
   bool eos;
   bool eoi;
+
+  bool repl;
 };
 
 void rd_reset_counters(struct Reader *rd) {
@@ -319,8 +321,11 @@ void rd_next_char(struct Reader *rd) {
 }
 
 void rd_skip_whitespaces(struct Reader *rd, bool newline) {
-  while ((IS_WHITESPACE(rd->cc)) || (newline && rd->cc == '\n'))
+  while ((IS_WHITESPACE(rd->cc)) || (newline && rd->cc == '\n')) {
+	if (rd->repl && rd->cc == '\n')
+	  printf(REPL_MULTILINE_PROMPT);
     rd_next_char(rd);
+  }
 }
 
 void rd_skip_line(struct Reader *rd) {
@@ -390,8 +395,6 @@ struct Lexer {
 
   enum TokenType tt;
   union Primitive pm;
-
-  bool repl;
 };
 
 int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
@@ -453,7 +456,7 @@ void lx_read_symbol(struct Lexer *lx) {
 
 void lx_next_token(struct Lexer *lx, bool force) {
   rd_next_char(&lx->rd);
-  rd_skip_whitespaces(&lx->rd, force || !lx->repl);
+  rd_skip_whitespaces(&lx->rd, force || !lx->rd.repl);
 
   switch (lx->rd.cc) {
   case '\n':
@@ -476,7 +479,7 @@ void lx_next_token(struct Lexer *lx, bool force) {
 
   lx->rd.mrk = lx->rd.ptr;
 
-  if (IS_DIGIT(lx->rd.cc)) {
+  if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.') {
     lx_next_token_number(lx);
   } else if (IS_LETTER(lx->rd.cc)) {
     lx_read_symbol(lx);
@@ -1093,7 +1096,7 @@ int main(int argc, char *argv[]) {
   static struct Arena principal_arena = {.head = NULL};
 
   if (isatty(STDIN_FILENO) && argc == 1) {
-    pr.lx.repl = true;
+    pr.lx.rd.repl = true;
 
     pr.lx.rd.page.cap = 1;
     pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
