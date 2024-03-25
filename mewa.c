@@ -41,7 +41,10 @@
 #include "arena.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
+#include <readline/history.h>
+#include <readline/readline.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -105,7 +108,8 @@
     return STRINGIFY(name);
 
 //=:util:ascii
-#define IS_WHITESPACE(c) (c == ' ' || c == '\t' || c == '\v' || c == '\r')
+#define IS_WHITESPACE(c)                                                       \
+  (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
 
 #define IS_LOWER(c) (c >= 'a' && c <= 'z')
 
@@ -132,7 +136,7 @@ typedef _BitInt(128) int_t;
 
 typedef unsigned _BitInt(128) unt_t;
 
-#define INT_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
+#define INT_T_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
 #define ENC_OFF ('Z' - 'A' + 1)
 
@@ -261,8 +265,6 @@ struct Reader {
   bool eof;
   bool eos;
   bool eoi;
-
-  bool repl;
 };
 
 void rd_reset_counters(struct Reader *rd) {
@@ -291,7 +293,7 @@ void rd_next_page(struct Reader *rd) {
 
   rd->eof = rd->page.len < rd->page.cap;
   if ((rd->eos = !rd->page.len))
-	rd->cc = '\0';
+    rd->cc = '\0';
 }
 
 void rd_next_char(struct Reader *rd) {
@@ -320,18 +322,15 @@ void rd_next_char(struct Reader *rd) {
   rd->cc = rd->page.data[rd->ptr];
 }
 
-void rd_skip_whitespaces(struct Reader *rd, bool newline) {
-  while ((IS_WHITESPACE(rd->cc)) || (newline && rd->cc == '\n')) {
-	if (rd->repl && rd->cc == '\n')
-	  printf(REPL_MULTILINE_PROMPT);
+void rd_skip_whitespaces(struct Reader *rd) {
+  while (IS_WHITESPACE(rd->cc))
     rd_next_char(rd);
-  }
 }
 
 void rd_skip_line(struct Reader *rd) {
   while (rd->cc != '\0' && rd->cc != '\n')
-	rd_next_char(rd);
-}  
+    rd_next_char(rd);
+}
 
 //=:lexer
 //     _
@@ -409,7 +408,7 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
     if (!overflow) {
       *mnt = *mnt * 10 + lx->rd.cc - '0';
       pow10 *= 10;
-      overflow = pow10 > INT_MAX / 10;
+      overflow = pow10 > INT_T_MAX / 10;
     } else
       ++*exp; // TODO: add warning that right part of integer were ignored
 
@@ -454,14 +453,11 @@ void lx_read_symbol(struct Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-void lx_next_token(struct Lexer *lx, bool force) {
+void lx_next_token(struct Lexer *lx) {
   rd_next_char(&lx->rd);
-  rd_skip_whitespaces(&lx->rd, force || !lx->rd.repl);
+  rd_skip_whitespaces(&lx->rd);
 
   switch (lx->rd.cc) {
-  case '\n':
-    lx->tt = TT_EOS;
-    return;
   case TT_LET:
   case TT_ADD:
   case TT_SUB:
@@ -511,6 +507,7 @@ enum NodeType {
   NT_BIOP_MOD = TT_MOD,
 
   NT_UNOP_NEG,
+  NT_UNOP_NOP,
 
   NT_BIOP_POW = TT_POW,
 };
@@ -527,6 +524,7 @@ const char *nt_stringify(enum NodeType nt) {
     STRINGIFY_CASE(NT_BIOP_QUO)
     STRINGIFY_CASE(NT_BIOP_MOD)
     STRINGIFY_CASE(NT_UNOP_NEG)
+    STRINGIFY_CASE(NT_UNOP_NOP)
     STRINGIFY_CASE(NT_BIOP_POW)
   }
 
@@ -593,6 +591,7 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
     nd_tree_print(node->as.bp.b, depth + 1, depth_max);
     return;
   case NT_UNOP_NEG:
+  case NT_UNOP_NOP:
     printf("\n");
     nd_tree_print(node->as.bp.a, depth + 1, depth_max);
     return;
@@ -670,6 +669,8 @@ bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
     return tt == TT_ADD || tt == TT_SUB;
   case PT_MUL_QUO_MOD:
     return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
+  case PT_NEG:
+    return tt == TT_SUB || tt == TT_ADD;
   case PT_POW0:
   case PT_POW1:
     return tt == TT_POW;
@@ -715,21 +716,21 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
   case TT_SYM:
     (*node)->type = NT_PRIM_SYM;
     (*node)->as.pm.n_int = pr->lx.pm.n_int;
-    lx_next_token(&pr->lx, false);
+    lx_next_token(&pr->lx);
     break;
   case TT_INT:
     (*node)->type = NT_PRIM_INT;
     (*node)->as.pm.n_int = pr->lx.pm.n_int;
-    lx_next_token(&pr->lx, false);
+    lx_next_token(&pr->lx);
     break;
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
     (*node)->as.pm.n_flt = pr->lx.pm.n_flt;
-    lx_next_token(&pr->lx, false);
+    lx_next_token(&pr->lx);
     break;
   case TT_LP0:
     ++pr->p0c;
-    lx_next_token(&pr->lx, true);
+    lx_next_token(&pr->lx);
     return pr_call(pr, node, pt);
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
@@ -746,12 +747,13 @@ enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
   struct Node *node_tmp = *node;
 
-  if (pr->lx.tt == TT_SUB) {
-    node_tmp->type = NT_UNOP_NEG;
+  if (pr_includes_tt(pr->lx.tt, pt)) {
+    node_tmp->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
+                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
     node_tmp->as.up.a =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     node_tmp = node_tmp->as.up.a;
-    lx_next_token(&pr->lx, true);
+    lx_next_token(&pr->lx);
   }
 
   return pr_call(pr, &node_tmp, pt);
@@ -770,7 +772,7 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    lx_next_token(&pr->lx, true);
+    lx_next_token(&pr->lx);
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
 
     node_tmp = *node;
@@ -795,7 +797,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->type = (enum NodeType)pr->lx.tt;
 
-    lx_next_token(&pr->lx, true);
+    lx_next_token(&pr->lx);
 
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
   } else
@@ -812,14 +814,14 @@ enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
     if (--pr->p0c < 0)
       return PR_ERR_PAREN_NOT_OPENED;
 
-    lx_next_token(&pr->lx, false);
+    lx_next_token(&pr->lx);
   }
 
   return PR_ERR_NOERROR;
 }
 
 enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
-  lx_next_token(&pr->lx, false);
+  lx_next_token(&pr->lx);
   TRY(PR_ERR, pr_call(pr, node, 00));
 
   return PR_ERR_NOERROR;
@@ -862,6 +864,8 @@ enum IR_ERR ir_unop_exec_int(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_INT;
 
   switch (op) {
+  case NT_UNOP_NOP:
+	break;
   case NT_UNOP_NEG:
     dst->as.pm.n_int = -a.n_int;
     break;
@@ -877,6 +881,8 @@ enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_FLT;
 
   switch (op) {
+  case NT_UNOP_NOP:
+	break;
   case NT_UNOP_NEG:
     dst->as.pm.n_flt = -a.n_flt;
     break;
@@ -1012,6 +1018,7 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
   case NT_PRIM_FLT:
     *dst = src;
     break;
+  case NT_UNOP_NOP:
   case NT_UNOP_NEG:
     return ir_unop_exec(dst, src);
   default:
@@ -1031,15 +1038,28 @@ static struct Node ast_source;
 static struct Node ast_result;
 
 void _Noreturn repl(struct Parser *pr) {
+  struct Node *src, *dst;
+
+  using_history();
+
   while (true) {
     arena_reset(&default_arena);
+    if (pr->lx.rd.page.data != NULL)
+      free(pr->lx.rd.page.data);
 
     rd_reset_counters(&pr->lx.rd);
 
-    struct Node *src = &ast_source;
-    struct Node *dst = &ast_result;
+    src = &ast_source;
+    dst = &ast_result;
 
-    printf(REPL_PROMPT);
+    if ((pr->lx.rd.page.data = readline(REPL_PROMPT)) == NULL)
+      PFATAL("cannot read line\n");
+
+    pr->lx.rd.page.len = SIZE_T_MAX;
+    if (pr->lx.rd.page.data[0] == '\0')
+      continue;
+
+    add_history(pr->lx.rd.page.data);
 
     enum PR_ERR perr = pr_next_node(pr, &src);
     if (perr != PR_ERR_NOERROR) {
@@ -1047,7 +1067,7 @@ void _Noreturn repl(struct Parser *pr) {
             " (%d) [token: " CLR_INTERNAL "%s" CLR_RESET " (%d)]\n",
             pr->lx.rd.row, pr->lx.rd.col, pr_err_stringify(perr), perr,
             tt_stringify(pr->lx.tt), pr->lx.tt);
-	  rd_skip_line(&pr->lx.rd);
+      rd_skip_line(&pr->lx.rd);
       continue;
     }
 
@@ -1077,7 +1097,7 @@ int main(int argc, char *argv[]) {
           {
               .rd =
                   {
-                      .src = stdin,
+                      .src = NULL,
                       .page =
                           {
                               .data = NULL,
@@ -1095,23 +1115,18 @@ int main(int argc, char *argv[]) {
 
   static struct Arena principal_arena = {.head = NULL};
 
-  if (isatty(STDIN_FILENO) && argc == 1) {
-    pr.lx.rd.repl = true;
-
-    pr.lx.rd.page.cap = 1;
-    pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
+  if (isatty(STDIN_FILENO) && argc == 1)
     repl(&pr);
-  }
 
   if (argc > 2)
     FATAL("too many arguments\n");
 
   if (argc == 2) {
-    pr.lx.rd.src = stdin;
-
     pr.lx.rd.page.len = pr.lx.rd.page.cap = strlen(argv[1]);
     pr.lx.rd.page.data = argv[1];
   } else {
+    pr.lx.rd.src = stdin;
+
     pr.lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
     pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
   }
