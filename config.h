@@ -34,7 +34,7 @@
 
 //=:config:colors
 // uncomment to disable colors
-#define NCOLORS
+// #define NCOLORS
 
 #define ESC "\x1b"
 
@@ -60,11 +60,11 @@
 // internal symbols color
 #define CLR_INTERNAL CLR_BMAG
 #else
-#define CLR_RESET ESC "[39;49m"
-#define CLR_ERR_MSG CLR_BRED
-#define CLR_INF_MSG CLR_BBLU
-#define CLR_PRIM CLR_BCYN
-#define CLR_INTERNAL CLR_BMAG
+#define CLR_RESET
+#define CLR_ERR_MSG
+#define CLR_INF_MSG
+#define CLR_PRIM
+#define CLR_INTERNAL
 #endif
 
 //=:config:output_format

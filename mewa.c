@@ -240,6 +240,17 @@ int_t pow_int(int_t base, int_t expo) {
   return rt;
 }
 
+int_t fac_int(int_t base, int_t step) {
+  if (base == 0)
+    return 1;
+
+  int_t rt = 1;
+  for (int_t i = base; i >= 2; i -= step)
+    rt *= i;
+
+  return rt;
+}
+
 //=:reader
 //                        _
 //                       | |
@@ -360,6 +371,8 @@ enum TokenType {
 
   TT_POW = '^',
 
+  TT_FAC = '!',
+
   TT_LP0 = '(',
   TT_RP0 = ')',
 
@@ -380,6 +393,7 @@ const char *tt_stringify(enum TokenType tt) {
     STRINGIFY_CASE(TT_QUO)
     STRINGIFY_CASE(TT_MOD)
     STRINGIFY_CASE(TT_POW)
+    STRINGIFY_CASE(TT_FAC)
     STRINGIFY_CASE(TT_LP0)
     STRINGIFY_CASE(TT_RP0)
     STRINGIFY_CASE(TT_EOX)
@@ -438,9 +452,9 @@ void lx_next_token_number(struct Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-void lx_read_symbol(struct Lexer *lx) {
+void lx_next_token_symbol(struct Lexer *lx) {
   lx->tt = TT_SYM;
-  lx->pm.n_int = 0;
+  lx->pm.n_unt = 0;
 
   int bit_off = 0;
 
@@ -449,6 +463,15 @@ void lx_read_symbol(struct Lexer *lx) {
     bit_off += 6;
     rd_next_char(&lx->rd);
   }
+
+  rd_prev(&lx->rd);
+}
+
+void lx_next_token_factorial(struct Lexer *lx) {
+  lx->tt = TT_FAC;
+
+  for (lx->pm.n_unt = 0; lx->rd.cc == TT_FAC; ++lx->pm.n_unt)
+    rd_next_char(&lx->rd);
 
   rd_prev(&lx->rd);
 }
@@ -478,7 +501,9 @@ void lx_next_token(struct Lexer *lx) {
   if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.') {
     lx_next_token_number(lx);
   } else if (IS_LETTER(lx->rd.cc)) {
-    lx_read_symbol(lx);
+    lx_next_token_symbol(lx);
+  } else if (lx->rd.cc == TT_FAC) {
+    lx_next_token_factorial(lx);
   } else
     lx->tt = TT_ILL;
 }
@@ -506,8 +531,10 @@ enum NodeType {
   NT_BIOP_QUO = TT_QUO,
   NT_BIOP_MOD = TT_MOD,
 
-  NT_UNOP_NEG,
+  NT_BIOP_FAC = TT_FAC,
+
   NT_UNOP_NOP,
+  NT_UNOP_NEG,
 
   NT_BIOP_POW = TT_POW,
 };
@@ -523,8 +550,9 @@ const char *nt_stringify(enum NodeType nt) {
     STRINGIFY_CASE(NT_BIOP_MUL)
     STRINGIFY_CASE(NT_BIOP_QUO)
     STRINGIFY_CASE(NT_BIOP_MOD)
-    STRINGIFY_CASE(NT_UNOP_NEG)
+    STRINGIFY_CASE(NT_BIOP_FAC)
     STRINGIFY_CASE(NT_UNOP_NOP)
+    STRINGIFY_CASE(NT_UNOP_NEG)
     STRINGIFY_CASE(NT_BIOP_POW)
   }
 
@@ -586,6 +614,7 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   case NT_BIOP_QUO:
   case NT_BIOP_MOD:
   case NT_BIOP_POW:
+  case NT_BIOP_FAC:
     printf("\n");
     nd_tree_print(node->as.bp.a, depth + 1, depth_max);
     nd_tree_print(node->as.bp.b, depth + 1, depth_max);
@@ -593,7 +622,7 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   case NT_UNOP_NEG:
   case NT_UNOP_NOP:
     printf("\n");
-    nd_tree_print(node->as.bp.a, depth + 1, depth_max);
+    nd_tree_print(node->as.up.a, depth + 1, depth_max);
     return;
   }
 }
@@ -639,9 +668,10 @@ enum Priority {
   PT_LET1,
   PT_ADD_SUB,
   PT_MUL_QUO_MOD,
-  PT_NEG,
+  PT_NOP_NEG,
   PT_POW0,
   PT_POW1,
+  PT_FAC,
   PT_PRIM,
 };
 
@@ -669,11 +699,13 @@ bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
     return tt == TT_ADD || tt == TT_SUB;
   case PT_MUL_QUO_MOD:
     return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
-  case PT_NEG:
+  case PT_NOP_NEG:
     return tt == TT_SUB || tt == TT_ADD;
   case PT_POW0:
   case PT_POW1:
     return tt == TT_POW;
+  case PT_FAC:
+    return tt == TT_FAC;
   default:
     DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
     return false;
@@ -691,13 +723,15 @@ enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
   case PT_ADD_SUB:
     return pr_lr_biop_next_node(pr, node, PT_MUL_QUO_MOD);
   case PT_MUL_QUO_MOD:
-    return pr_rl_unop_next_node(pr, node, PT_NEG);
-  case PT_NEG:
+    return pr_rl_unop_next_node(pr, node, PT_NOP_NEG);
+  case PT_NOP_NEG:
     return pr_rl_biop_next_node(pr, node, PT_POW0);
   case PT_POW0:
-    return pr_next_primitive_node(pr, node, PT_PRIM);
+    return pr_lr_biop_next_node(pr, node, PT_FAC);
   case PT_POW1:
-    return pr_rl_unop_next_node(pr, node, PT_NEG);
+    return pr_rl_unop_next_node(pr, node, PT_NOP_NEG);
+  case PT_FAC:
+    return pr_next_primitive_node(pr, node, PT_PRIM);
   case PT_PRIM:
     return pr_skip_rp0(pr, node, PT_SKIP_RP0);
   }
@@ -715,7 +749,7 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
     return PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED;
   case TT_SYM:
     (*node)->type = NT_PRIM_SYM;
-    (*node)->as.pm.n_int = pr->lx.pm.n_int;
+    (*node)->as.pm.n_unt = pr->lx.pm.n_unt;
     lx_next_token(&pr->lx);
     break;
   case TT_INT:
@@ -726,6 +760,11 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
     (*node)->as.pm.n_flt = pr->lx.pm.n_flt;
+    lx_next_token(&pr->lx);
+    break;
+  case TT_FAC:
+    (*node)->type = NT_PRIM_INT;
+    (*node)->as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
     break;
   case TT_LP0:
@@ -772,7 +811,8 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    lx_next_token(&pr->lx);
+    if (pr->lx.tt != TT_FAC)
+      lx_next_token(&pr->lx);
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
 
     node_tmp = *node;
@@ -844,6 +884,7 @@ enum IR_ERR {
   IR_ERR_ILL_NT,
   IR_ERR_INT_OR_FLT_ARG_EXPECTED,
   IR_ERR_DIV_BY_ZERO,
+  IR_ERR_OP_NOT_DEFINED_FOR_TYPE,
 };
 
 const char *ir_err_stringify(enum IR_ERR ir_err) {
@@ -852,6 +893,7 @@ const char *ir_err_stringify(enum IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_ILL_NT)
     STRINGIFY_CASE(IR_ERR_INT_OR_FLT_ARG_EXPECTED)
     STRINGIFY_CASE(IR_ERR_DIV_BY_ZERO)
+	STRINGIFY_CASE(IR_ERR_OP_NOT_DEFINED_FOR_TYPE)
   }
 
   return STRINGIFY(INVALID_IR_ERR);
@@ -865,7 +907,7 @@ enum IR_ERR ir_unop_exec_int(struct Node *dst, enum NodeType op,
 
   switch (op) {
   case NT_UNOP_NOP:
-	break;
+    break;
   case NT_UNOP_NEG:
     dst->as.pm.n_int = -a.n_int;
     break;
@@ -882,7 +924,7 @@ enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
 
   switch (op) {
   case NT_UNOP_NOP:
-	break;
+    break;
   case NT_UNOP_NEG:
     dst->as.pm.n_flt = -a.n_flt;
     break;
@@ -943,6 +985,9 @@ enum IR_ERR ir_biop_exec_int(struct Node *dst, enum NodeType op,
       dst->as.pm.n_int = pow_int(a.n_int, b.n_int);
 
     break;
+  case NT_BIOP_FAC:
+    dst->as.pm.n_int = fac_int(a.n_int, b.n_int);
+    break;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -975,6 +1020,12 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
     break;
   case NT_BIOP_POW:
     dst->as.pm.n_flt = powl(a.n_flt, b.n_flt);
+    break;
+  case NT_BIOP_FAC:
+    if (b.n_flt > 1)
+	  return IR_ERR_OP_NOT_DEFINED_FOR_TYPE;
+      
+    dst->as.pm.n_flt = tgamma(a.n_flt + 1);
     break;
   default:
     return IR_ERR_ILL_NT;
