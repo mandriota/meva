@@ -5,8 +5,7 @@ A simple Math EWAluator written on C.
 ```sh
 git clone https://github.com/mandriota/mewa
 cd mewa
-make build
-sudo ln -n ./bin/mewa /usr/local/bin/mewa
+./configure && make && sudo make install
 ```
 
 ## Featchers
