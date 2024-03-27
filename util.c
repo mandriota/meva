@@ -116,7 +116,7 @@ int_t fac_int(int_t base, int_t step) {
   return rt;
 }
 
-flt_t fac_flt_util(flt_t i, flt_t step) {
+flt_t fac_flt_helper(flt_t i, flt_t step) {
   flt_t rt = 0;
 
   for (int_t j = 1; j <= step; ++j)
@@ -130,7 +130,7 @@ flt_t fac_flt(flt_t base, flt_t step) {
 
   for (int_t i = 1; i < step; ++i)
     rt *= powl(powl(step, (step - i) / step) / tgammal(i / step),
-               fac_flt_util(base - i, step));
+               fac_flt_helper(base - i, step));
 
   return rt;
 }
