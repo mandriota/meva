@@ -1,14 +1,15 @@
 # (=​｀ω´=) MEWA
 A simple Math EWAluator written on C.
 
-## Build from Source (;´ρ`)
+## Installation
 ```sh
 git clone https://github.com/mandriota/mewa
 cd mewa
 make build
+sudo ln -n ./bin/mewa /usr/local/bin/mewa
 ```
 
-## Featchers (。・・)_且
+## Featchers
 - [x] Basic arithmetic operators
 - [x] Operators priority and associativity
 - [x] Type inference
@@ -17,9 +18,11 @@ make build
 - [ ] Function ranged specialization
 - [x] Command-line arguments and redirects handling
 - [x] REPL
-- [x] REPL: multiline input
+- [ ] REPL: multiline input
+- [x] REPL: history
+- [x] REPL: escape handling
 
-## Naming Conventions ＿φ(￣ー￣ )
+## Naming Conventions
 ### Constants, Enums, Defines
 All caps, snake case.
 
@@ -35,7 +38,7 @@ Same as functions. First word is an abbreviation of struct name.
 ### Names abbreviations list
 | Name          | Abbreviation |
 |:--------------|:-------------|
-| `Primitive`   | `PM`         |
+| `Primitive`   | `PM`/`PRIM`  |
 | `Reader`      | `RD`         |
 | `Token`       | `TK`         |
 | `TokenType`   | `TT`         |
@@ -46,5 +49,5 @@ Same as functions. First word is an abbreviation of struct name.
 | `Priority`    | `PT`         |
 | `Interpreter` | `IR`         |
 
-## Acknowledgements (￣ω￣;)
+## Acknowledgements
 - Thanks to [Giovanni Crisalfi](https://github.com/gicrisf) for [the kaomoji collection](https://github.com/gicrisf/kaomel) used in this file.
