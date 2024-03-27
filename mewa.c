@@ -832,9 +832,6 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
     dst->as.pm.n_flt = powl(a.n_flt, b.n_flt);
     break;
   case NT_BIOP_FAC:
-    /* if (b.n_flt > 1) */
-    /*   return IR_ERR_OP_NOT_DEFINED_FOR_TYPE; */
-
     dst->as.pm.n_flt = fac_flt(a.n_flt, b.n_flt);
     break;
   default:
