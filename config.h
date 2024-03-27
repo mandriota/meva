@@ -30,7 +30,7 @@
 
 //=:config:debug
 // comment to disable debug mode
-#define NDEBUG
+// #define NDEBUG
 
 //=:config:colors
 // uncomment to disable colors

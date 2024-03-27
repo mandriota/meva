@@ -40,13 +40,14 @@
 
 #include "arena.h"
 
+#include "util.h"
+
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
 #include <readline/history.h>
 #include <readline/readline.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,199 +58,8 @@
 #error INTERNAL_READING_BUF_SIZE must be at least 1
 #endif
 
-//=:util
-//           _   _ _
-//          | | (_) |
-//     _   _| |_ _| |
-//    | | | | __| | |
-//    | |_| | |_| | |
-//     \__,_|\__|_|_|
-
-//=:util:error_handling
-#define FATAL(...)                                                             \
-  {                                                                            \
-    fprintf(stderr, CLR_ERR_MSG "FATAL" CLR_RESET ": " __VA_ARGS__);           \
-    exit(EXIT_FAILURE);                                                        \
-  }
-
-#define PFATAL(s)                                                              \
-  {                                                                            \
-    perror(s);                                                                 \
-    exit(EXIT_FAILURE);                                                        \
-  }
-
-#define ERROR(...)                                                             \
-  fprintf(stderr, CLR_ERR_MSG "ERROR" CLR_RESET ": " __VA_ARGS__)
-
-#define TRY(prefix, expr)                                                      \
-  {                                                                            \
-    enum prefix err = expr;                                                    \
-    if (err != prefix##_NOERROR)                                               \
-      return err;                                                              \
-  }
-
-//=:util:debug
-#ifdef NDEBUG
-#define DBG_PRINT(...)
-#define DBG_FATAL(...)
-#define DBG(x)
-#else
-#define DBG_PRINT(...)                                                         \
-  fprintf(stderr, CLR_INF_MSG "INFO" CLR_RESET ": " __VA_ARGS__)
-#define DBG_FATAL(...) FATAL(__VA_ARGS__)
-#define DBG(x) x
-#endif
-
-//=:util:other
-#define STRINGIFY(name) #name
-
-#define STRINGIFY_CASE(name)                                                   \
-  case name:                                                                   \
-    return STRINGIFY(name);
-
-//=:util:ascii
-#define IS_WHITESPACE(c)                                                       \
-  (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
-
-#define IS_LOWER(c) (c >= 'a' && c <= 'z')
-
-#define IS_UPPER(c) (c >= 'A' && c <= 'Z')
-
-#define IS_LETTER(c) (IS_LOWER(c) || IS_UPPER(c) || c == '_')
-
-#define IS_DIGIT(c) (c >= '0' && c <= '9')
-
-//=:util:globals
+//=:globals
 static struct Arena default_arena = {.head = NULL};
-
-//=:util:data_structures
-struct StringBuffer {
-  char *data;
-  size_t len;
-  size_t cap;
-};
-
-//=:util:types
-typedef long double flt_t;
-
-typedef _BitInt(128) int_t;
-
-typedef unsigned _BitInt(128) unt_t;
-
-#define INT_T_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
-
-#define ENC_OFF ('Z' - 'A' + 1)
-
-//=:util:encoding
-unt_t encode_symbol_c(char c) {
-  if (IS_UPPER(c))
-    return (c - 'A') + 1;
-  if (IS_LOWER(c))
-    return (c - 'a') + ENC_OFF + 1;
-  if (c == '_')
-    return ENC_OFF * 2 + 1;
-  if (IS_DIGIT(c))
-    return (c - '0') + ENC_OFF * 2 + 2;
-
-  DBG_FATAL("symbol's character (%d) is out of range", c);
-  return 0;
-}
-
-char decode_symbol_c(char c) {
-  if (c >= 1 && c <= ENC_OFF)
-    return (c + 'A') - 1;
-  if (c >= ENC_OFF + 1 && c <= ENC_OFF * 2)
-    return (c + 'a') - ENC_OFF - 1;
-  if (c == ENC_OFF * 2 + 1)
-    return '_';
-  if (c >= ENC_OFF * 2 + 2 && c <= ENC_OFF * 2 + 12)
-    return (c + '0') - ENC_OFF * 2 - 2;
-
-  DBG_FATAL("symbol's character (%d) is out of range", c);
-  return 0;
-}
-
-char *decode_symbol(char *dst, char *dst_end, unt_t src) {
-  char *p, c;
-
-  for (p = dst; src && p < dst_end; ++p) {
-    c = src & ((1 << 6) - 1);
-    *p = decode_symbol_c(c);
-    src >>= 6;
-  }
-
-  if (src != 0)
-    FATAL("buffer capacity is not enough\n");
-
-  return p;
-}
-
-//=:runtime
-//                      _   _
-//                     | | (_)
-//     _ __ _   _ _ __ | |_ _ _ __ ___   ___
-//    | '__| | | | '_ \| __| | '_ ` _ \ / _	\
-//    | |  | |_| | | | | |_| | | | | | |  __/
-//    |_|   \__,_|_| |_|\__|_|_| |_| |_|\___|
-
-char *int_stringify(char *dst, char *dst_end, int_t num) {
-  assert(dst_end >= dst);
-
-  char *p = dst_end + 1;
-  int_t n = num;
-
-  if (n == 0) {
-    *--p = '0';
-    return p;
-  }
-
-  while (n) {
-    if (p == dst)
-      FATAL("buffer capacity is not enough\n");
-
-    *--p = (num < 0 ? -1 : 1) * (n % 10) + '0';
-    n /= 10;
-  }
-
-  if (num < 0)
-    *--p = '-';
-
-  return p;
-}
-
-union Primitive {
-  flt_t n_flt;
-  int_t n_int;
-  unt_t n_unt;
-};
-
-//=:runtime:operators
-int_t pow_int(int_t base, int_t expo) {
-  if (expo == 0)
-    return 1;
-  if (expo == 1)
-    return base;
-
-  int_t rt = 1;
-  while (expo > 0) {
-    if (expo % 2 == 1)
-      rt *= base;
-    expo /= 2;
-    base *= base;
-  }
-  return rt;
-}
-
-int_t fac_int(int_t base, int_t step) {
-  if (base == 0)
-    return 1;
-
-  int_t rt = 1;
-  for (int_t i = base; i >= 2; i -= step)
-    rt *= i;
-
-  return rt;
-}
 
 //=:reader
 //                        _
@@ -893,7 +703,7 @@ const char *ir_err_stringify(enum IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_ILL_NT)
     STRINGIFY_CASE(IR_ERR_INT_OR_FLT_ARG_EXPECTED)
     STRINGIFY_CASE(IR_ERR_DIV_BY_ZERO)
-	STRINGIFY_CASE(IR_ERR_OP_NOT_DEFINED_FOR_TYPE)
+    STRINGIFY_CASE(IR_ERR_OP_NOT_DEFINED_FOR_TYPE)
   }
 
   return STRINGIFY(INVALID_IR_ERR);
@@ -1022,10 +832,10 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
     dst->as.pm.n_flt = powl(a.n_flt, b.n_flt);
     break;
   case NT_BIOP_FAC:
-    if (b.n_flt > 1)
-	  return IR_ERR_OP_NOT_DEFINED_FOR_TYPE;
-      
-    dst->as.pm.n_flt = tgamma(a.n_flt + 1);
+    /* if (b.n_flt > 1) */
+    /*   return IR_ERR_OP_NOT_DEFINED_FOR_TYPE; */
+
+    dst->as.pm.n_flt = fac_flt(a.n_flt, b.n_flt);
     break;
   default:
     return IR_ERR_ILL_NT;

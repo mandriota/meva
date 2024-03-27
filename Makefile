@@ -12,5 +12,5 @@ endif
 run: build
 	./mewa
 
-build: mewa.c arena.c
-	$(CC) $(CFLAGS) -o mewa mewa.c arena.c
+build: mewa.c arena.c util.c
+	$(CC) $(CFLAGS) -o mewa mewa.c arena.c util.c
