@@ -6,7 +6,7 @@ ifeq ($(DEBUG),1)
 		-fsanitize=float-cast-overflow -fno-sanitize=null            \
 		-fno-sanitize=alignment -g -Wall -Wextra -Werror -Wpedantic
 else
-	CFLAGS := -std=gnu2x -lreadline -O2 -Wall -Wextra -Werror -Wpedantic
+	CFLAGS := -std=gnu2x -lreadline -DNDEBUG -O2 -Wall -Wextra -Werror -Wpedantic
 endif
 
 run: build
