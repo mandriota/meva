@@ -9,8 +9,18 @@ else
 	CFLAGS := -std=gnu2x -lreadline -DNDEBUG -O2 -Wall -Wextra -Werror -Wpedantic
 endif
 
-run: build
-	./mewa
-
 build: mewa.c arena.c util.c
-	$(CC) $(CFLAGS) -o mewa mewa.c arena.c util.c
+	test -d "./bin" || mkdir bin
+
+	$(CC) $(CFLAGS) -o bin/mewa mewa.c arena.c util.c
+
+run: build
+	./bin/mewa
+
+install: build
+	if [ -f /usr/local/bin/mewa ]; then \
+		rm /usr/local/bin/mewa; 		\
+	fi
+
+	ln -n ./bin/mewa /usr/local/bin
+

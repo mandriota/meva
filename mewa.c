@@ -966,7 +966,6 @@ int main(int argc, char *argv[]) {
           },
       .p0c = 0,
   };
-  rd_reset_counters(&pr.lx.rd);
 
   struct Node *src = &ast_source;
   struct Node *dst = &ast_result;
@@ -988,6 +987,8 @@ int main(int argc, char *argv[]) {
     pr.lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
     pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
   }
+
+  rd_reset_counters(&pr.lx.rd);
 
   enum PR_ERR perr = pr_next_node(&pr, &src);
   if (perr != PR_ERR_NOERROR)
