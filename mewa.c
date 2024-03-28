@@ -43,15 +43,15 @@
 #include "util.h"
 
 #include <math.h>
-#include <stdbool.h> // IWYU pragma: keep
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <stdbool.h> // IWYU pragma: keep
 
 #ifdef HAVE_LIBREADLINE
-#include <readline/history.h> // IWYU pragma: keep
 #include <readline/readline.h>
+#include <readline/history.h> // IWYU pragma: keep
 #endif
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
@@ -576,12 +576,12 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
     lx_next_token(&pr->lx);
     break;
   case TT_INT:
-    DBG_PRINT("setting int node\n");
+	DBG_PRINT("setting int node\n");
     (*node)->type = NT_PRIM_INT;
     (*node)->as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
 
-    DBG_PRINT("int node set\n");
+	DBG_PRINT("int node set\n");
     break;
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
@@ -627,7 +627,7 @@ enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
 enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
   (*node)->as.bp.a =
-      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
   DBG_PRINT("%s: pending primitive 1\n", __func__);
 
@@ -642,21 +642,20 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
   DBG_PRINT("%s: p0c: %zx\n", __func__, pr->p0c);
   DBG_PRINT("%s: !!!!\n", __func__);
   DBG_PRINT("%s: lx.tt: %s\n", __func__, tt_stringify(pr->lx.tt));
-  DBG_PRINT("%s: pr_includes_tt(pr->lx.tt, pt): %d\n", __func__,
-            pr_includes_tt(pr->lx.tt, pt));
+  DBG_PRINT("%s: pr_includes_tt(pr->lx.tt, pt): %d\n", __func__, pr_includes_tt(pr->lx.tt, pt));
 
   while (pr_includes_tt(pr->lx.tt, pt)) { // segfault!
-    DBG_PRINT("%s: loop entered\n", __func__);
+	DBG_PRINT("%s: loop entered\n", __func__);
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
-        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    DBG_PRINT("%s: b allocated", __func__);
+      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+	DBG_PRINT("%s: b allocated", __func__);
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
 
-    DBG_PRINT("%s: pending primitive 2\n", __func__);
+	DBG_PRINT("%s: pending primitive 2\n", __func__);
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
-    DBG_PRINT("%s: primitive 2 received\n", __func__);
+	DBG_PRINT("%s: primitive 2 received\n", __func__);
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
@@ -678,7 +677,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
   DBG_PRINT("%s: pending primitive 1\n", __func__);
-
+   
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
 
   DBG_PRINT("%s: primitive 1 received\n", __func__);
@@ -692,9 +691,9 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
 
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
   } else {
-    DBG_PRINT("%s: setting node\n", __func__);
+	DBG_PRINT("%s: setting node\n", __func__);
     **node = *(*node)->as.bp.a; // segfault!
-    DBG_PRINT("%s: node set\n", __func__);
+	DBG_PRINT("%s: node set\n", __func__);
   }
 
   DBG_PRINT("%s: returning\n", __func__);
@@ -705,7 +704,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
 enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
                         enum Priority pt) {
   DBG_PRINT("%s: pending primitive 1\n", __func__);
-
+  
   TRY(PR_ERR, pr_call(pr, node, pt));
 
   DBG_PRINT("%s: primitive 1 received\n", __func__);
@@ -946,7 +945,7 @@ static struct Node ast_source;
 static struct Node ast_result;
 
 _Noreturn void repl(struct Parser *pr) {
-  struct Node *src, *dst;
+  volatile struct Node *src, *dst;
 
 #ifdef _READLINE_H_
   using_history();
@@ -961,10 +960,8 @@ _Noreturn void repl(struct Parser *pr) {
 
     rd_reset_counters(&pr->lx.rd);
 
-    src = (struct Node *)arena_acquire(&default_arena,
-                                       sizeof(struct Node)); //  &ast_source;
-    dst = (struct Node *)arena_acquire(&default_arena,
-                                       sizeof(struct Node)); // &ast_result;
+    src = &ast_source;
+    dst = &ast_result;
 
 #ifdef _READLINE_H_
     if ((pr->lx.rd.page.data = readline(REPL_PROMPT)) == NULL)
@@ -1030,7 +1027,7 @@ int main(int argc, char *argv[]) {
                               .cap = 0,
                           },
                   },
-              .tt = 0,
+			  .tt = 0,
           },
       .p0c = 0,
   };
