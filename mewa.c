@@ -635,11 +635,15 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
 
   DBG_PRINT("primitive 1 received\n");
 
-  struct Node *node_tmp = (*node)->as.bp.a; // segfault?
+  struct Node *node_tmp = (*node)->as.bp.a;
 
   DBG_PRINT("entering loop\n");
 
-  while (pr_includes_tt(pr->lx.tt, pt)) { // segfault?
+  DBG_PRINT("p0c: %zx\n", pr->p0c);
+  DBG_PRINT("!!!!\n");
+  DBG_PRINT("lx.tt: %s\n", tt_stringify(pr->lx.tt));
+
+  while (pr_includes_tt(pr->lx.tt, pt)) { // segfault!
 	DBG_PRINT("loop entered\n");
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
