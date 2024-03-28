@@ -666,7 +666,7 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
 
   DBG_PRINT("%s: setting node to node_tmp\n", __func__);
 
-  *node = node_tmp;
+  **node = *node_tmp;
 
   DBG_PRINT("%s: node is set to node_tmp\n", __func__);
 
