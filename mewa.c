@@ -538,7 +538,7 @@ bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
 enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
-    return pr_lr_biop_next_node(pr, node, PT_LET0);
+    return pr_rl_biop_next_node(pr, node, PT_LET0);
   case PT_LET0:
     return pr_lr_biop_next_node(pr, node, PT_ADD_SUB);
   case PT_LET1:
@@ -662,11 +662,11 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     (*node)->as.bp.a = node_tmp;
   }
 
-  DBG_PRINT("setting node to node_tmp");
+  DBG_PRINT("setting node to node_tmp\n");
 
   *node = node_tmp;
 
-  DBG_PRINT("node is set to node_tmp");
+  DBG_PRINT("node is set to node_tmp\n");
 
   return PR_ERR_NOERROR;
 }
