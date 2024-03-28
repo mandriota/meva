@@ -658,7 +658,8 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
     DBG_PRINT("%s: primitive 2 received\n", __func__);
 
-    node_tmp = *node;
+	node_tmp = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    *node_tmp = **node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->as.bp.a = node_tmp;
   }
