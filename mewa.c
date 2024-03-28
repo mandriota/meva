@@ -576,9 +576,12 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
     lx_next_token(&pr->lx);
     break;
   case TT_INT:
+	DBG_PRINT("setting int node\n");
     (*node)->type = NT_PRIM_INT;
     (*node)->as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
+
+	DBG_PRINT("int node set\n");
     break;
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
@@ -624,19 +627,28 @@ enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
 enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
   (*node)->as.bp.a =
-      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+
+  DBG_PRINT("pending primitive 1\n");
 
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
+
+  DBG_PRINT("primitive 1 received\n");
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
   while (pr_includes_tt(pr->lx.tt, pt)) {
+	DBG_PRINT("loop entered\n");
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
-        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+	DBG_PRINT("b allocated");
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
+
+	DBG_PRINT("pending primitive 2\n");
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
+	DBG_PRINT("primitive 2 received\n");
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
