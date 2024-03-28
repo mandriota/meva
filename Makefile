@@ -2,7 +2,7 @@ EXEC := mewa
 
 CC := clang
 LIBS := -lreadline
-CFLAGS := -std=c11
+CFLAGS := -std=gnu2x
 WARNINGS := -Wall -Wextra -Werror -Wpedantic
 
 ifeq ($(DEBUG),1)
