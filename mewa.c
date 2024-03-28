@@ -50,6 +50,7 @@
 
 #ifdef HAVE_LIBREADLINE
 #include <readline/readline.h>
+#include <readline/history.h> // IWYU pragma: keep
 #endif
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
