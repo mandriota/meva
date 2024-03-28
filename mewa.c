@@ -677,6 +677,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
+  DBG_PRINT("%s: priority: %d\n", __func__, pt);
   DBG_PRINT("%s: pending primitive 1\n", __func__);
 
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
