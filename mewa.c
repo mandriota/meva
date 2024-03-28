@@ -693,6 +693,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
 
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
   } else {
+	DBG_PRINT("%s: priority: %d\n", __func__, pt);
     DBG_PRINT("%s: setting node\n", __func__);
 	DBG_PRINT("%s: node type: %s\n", __func__, nt_stringify((*node)->type));
 	DBG_PRINT("%s: node.a type: %s\n", __func__, nt_stringify((*node)->as.bp.a->type));
