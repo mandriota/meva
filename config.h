@@ -83,7 +83,7 @@
 //=:config:pipe
 #define PIPE_RESULT_PREFIX "= "
 
-#define PIPE_RESULT_SUFFIX ""
+#define PIPE_RESULT_SUFFIX " "
 
 //=:config:repl
 #define REPL_PROMPT "? "

@@ -33,7 +33,7 @@
 //    (_)          | |         | |
 //     _ _ __   ___| |_   _  __| | ___  ___
 //    | | '_ \ / __| | | | |/ _` |/ _ \/ __|
-//    | | | | | (__| | |_| | (_| |  __/\__ \
+//    | | | | | (__| | |_| | (_| |  __/\__ -
 //    |_|_| |_|\___|_|\__,_|\__,_|\___||___/
 
 #include "config.h"
@@ -454,7 +454,7 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
 struct Parser {
   struct Lexer lx;
 
-  size_t p0c;
+  ssize_t p0c;
 };
 
 enum PR_ERR {
@@ -908,7 +908,7 @@ enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
 static struct Node ast_source;
 static struct Node ast_result;
 
-void _Noreturn repl(struct Parser *pr) {
+_Noreturn void repl(struct Parser *pr) {
   struct Node *src, *dst;
 
 #ifdef _READLINE_H_
@@ -963,7 +963,7 @@ void _Noreturn repl(struct Parser *pr) {
 #endif
 
     enum IR_ERR ierr = ir_exec(&dst, src);
-    if (ierr != PR_ERR_NOERROR) {
+    if (ierr != IR_ERR_NOERROR) {
       ERROR(CLR_INTERNAL "%s" CLR_RESET " (%d)\n", ir_err_stringify(ierr),
             ierr);
       continue;
@@ -1028,7 +1028,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   enum IR_ERR ierr = ir_exec(&dst, src);
-  if (ierr != PR_ERR_NOERROR)
+  if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
   printf(PIPE_RESULT_PREFIX);
