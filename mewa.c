@@ -610,18 +610,16 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
 
 enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
-  struct Node *node_tmp = *node;
-
   if (pr_includes_tt(pr->lx.tt, pt)) {
-    node_tmp->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
+    (*node)->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
                      NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
-    node_tmp->as.up.a =
+    (*node)->as.up.a =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    node_tmp = node_tmp->as.up.a;
+    (*node) = (*node)->as.up.a;
     lx_next_token(&pr->lx);
   }
 
-  return pr_call(pr, &node_tmp, pt);
+  return pr_call(pr, node, pt);
 }
 
 enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
@@ -658,7 +656,6 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
     DBG_PRINT("%s: primitive 2 received\n", __func__);
 
-	node_tmp = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->as.bp.a = node_tmp;
@@ -666,7 +663,7 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
 
   DBG_PRINT("%s: setting node to node_tmp\n", __func__);
 
-  **node = *node_tmp;
+  *node = node_tmp;
 
   DBG_PRINT("%s: node is set to node_tmp\n", __func__);
 
