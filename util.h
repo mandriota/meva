@@ -23,8 +23,9 @@
 
 #include "config.h"
 
-#include <stdlib.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 //=:util
 //           _   _ _
@@ -98,9 +99,15 @@ struct StringBuffer {
 //=:util:types
 typedef long double flt_t;
 
-typedef _BitInt(128) int_t;
+#ifdef BITINT_MAXWIDTH
+typedef _BitInt(BITINT_MAXWIDTH) int_t;
 
-typedef unsigned _BitInt(128) unt_t;
+typedef unsigned _BitInt(BITINT_MAXWIDTH) unt_t;
+#else
+typedef long long int_t;
+
+typedef unsigned long long unt_t;
+#endif
 
 #define INT_T_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
