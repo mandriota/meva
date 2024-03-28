@@ -693,6 +693,8 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
   } else
     **node = *(*node)->as.bp.a;
 
+  DBG_PRINT("%s: returning\n");
+
   return PR_ERR_NOERROR;
 }
 
