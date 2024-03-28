@@ -690,8 +690,11 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
     lx_next_token(&pr->lx);
 
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
-  } else
+  } else {
+	DBG_PRINT("%s: setting node\n", __func__);
     **node = *(*node)->as.bp.a;
+	DBG_PRINT("%s: node set\n", __func__);
+  }
 
   DBG_PRINT("%s: returning\n", __func__);
 
