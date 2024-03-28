@@ -612,7 +612,7 @@ enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
   if (pr_includes_tt(pr->lx.tt, pt)) {
     (*node)->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
-                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
+                    NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
     (*node)->as.up.a =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node) = (*node)->as.up.a;
@@ -677,6 +677,10 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
 
   DBG_PRINT("%s: priority: %d\n", __func__, pt);
   DBG_PRINT("%s: pending primitive 1\n", __func__);
+  struct Node *tmp_p = (*node)->as.bp.a;
+  DBG_PRINT("%s: dereferencing ptr\n", __func__);
+  struct Node tmp = *tmp_p;
+  DBG_PRINT("%s: dereferenced type: %s\n", __func__, nt_stringify(tmp.type));
 
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
 
@@ -691,14 +695,15 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
 
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
   } else {
-	DBG_PRINT("%s: priority: %d\n", __func__, pt);
+    DBG_PRINT("%s: priority: %d\n", __func__, pt);
     DBG_PRINT("%s: setting node\n", __func__);
-	DBG_PRINT("%s: node type: %s\n", __func__, nt_stringify((*node)->type));
-	DBG_PRINT("%s: node.a type: %s\n", __func__, nt_stringify((*node)->as.bp.a->type));
-	struct Node * tmp_p = (*node)->as.bp.a;
-	DBG_PRINT("%s: dereferencing ptr\n", __func__);
-	struct Node tmp = *tmp_p;
-	DBG_PRINT("%s: again...\n", __func__);
+    DBG_PRINT("%s: node type: %s\n", __func__, nt_stringify((*node)->type));
+    DBG_PRINT("%s: node.a type: %s\n", __func__,
+              nt_stringify((*node)->as.bp.a->type));
+    struct Node *tmp_p = (*node)->as.bp.a;
+    DBG_PRINT("%s: dereferencing ptr\n", __func__);
+    struct Node tmp = *tmp_p;
+    DBG_PRINT("%s: again...\n", __func__);
     **node = tmp; // segfault!
     DBG_PRINT("%s: node set\n", __func__);
   }
