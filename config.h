@@ -34,7 +34,7 @@
 
 //=:config:colors
 // uncomment to disable colors
-// #define NCOLORS
+#define NCOLORS
 
 #define ESC "\x1b"
 

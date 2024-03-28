@@ -26,7 +26,7 @@ endif
 build: mewa.c arena.c util.c
 	@echo "BUILDING EXECUTABLE"
 
-	test -d "./bin" || mkdir bin
+	@[ -d "./bin" ] || mkdir bin
 
 	$(CC) $(CFLAGS) $(WARNINGS) $(LIBS) -o bin/$(EXEC) mewa.c arena.c util.c
 

@@ -42,16 +42,13 @@
 
 #include "util.h"
 
-#include <assert.h>
-#include <limits.h>
 #include <math.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #ifdef HAVE_LIBREADLINE
-#include <readline/history.h>
 #include <readline/readline.h>
 #endif
 
@@ -383,7 +380,7 @@ const char *nt_stringify(enum NodeType nt) {
   return STRINGIFY(INVALID_NT);
 }
 
-struct Node;
+struct Node; // IWYU pragma: keep
 
 struct UnOp {
   struct Node *a;
@@ -701,7 +698,7 @@ enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
 //                         | |
 //                         |_|
 
-struct Interpreter;
+struct Interpreter; // IWYU pragma: keep
 
 enum IR_ERR {
   IR_ERR_NOERROR,
@@ -932,7 +929,7 @@ void _Noreturn repl(struct Parser *pr) {
     if ((pr->lx.rd.page.data = readline(REPL_PROMPT)) == NULL)
       PFATAL("cannot read line\n");
 
-    pr->lx.rd.page.len = SIZE_T_MAX;
+    pr->lx.rd.page.len = SIZE_MAX;
     if (pr->lx.rd.page.data[0] == '\0')
       continue;
 
