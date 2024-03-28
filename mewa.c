@@ -662,7 +662,11 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     (*node)->as.bp.a = node_tmp;
   }
 
+  DBG_PRINT("setting node to node_tmp");
+
   *node = node_tmp;
+
+  DBG_PRINT("node is set to node_tmp");
 
   return PR_ERR_NOERROR;
 }
