@@ -28,6 +28,10 @@
 #include <stdlib.h>
 #include <math.h>
 
+#if __STDC_VERSION__ < 202000L
+#include <stdbool.h>
+#endif
+
 #ifndef M_PI
 #define M_PI 3.14159265358979323846264338327950288
 #endif

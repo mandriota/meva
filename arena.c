@@ -20,6 +20,8 @@
 
 #include "arena.h"
 
+#include "util.h"
+
 #include <assert.h>
 
 size_t align(size_t sz) {
