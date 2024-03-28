@@ -47,6 +47,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h> // IWYU pragma: keep
 
 #ifdef HAVE_LIBREADLINE
 #include <readline/readline.h>

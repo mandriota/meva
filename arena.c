@@ -20,9 +20,8 @@
 
 #include "arena.h"
 
-#include "util.h"
-
 #include <assert.h>
+#include <stdbool.h> // IWYU pragma: keep
 
 size_t align(size_t sz) {
   return sz + (sizeof sz - ((sz - 1) & (sizeof sz - 1))) - 1;
