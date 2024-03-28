@@ -692,7 +692,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
   } else {
 	DBG_PRINT("%s: setting node\n", __func__);
-    **node = *(*node)->as.bp.a;
+    **node = *(*node)->as.bp.a; // segfault!
 	DBG_PRINT("%s: node set\n", __func__);
   }
 
@@ -960,6 +960,9 @@ _Noreturn void repl(struct Parser *pr) {
 
     rd_reset_counters(&pr->lx.rd);
 
+	struct Node ast_source;
+	struct Node ast_result;
+	
     src = &ast_source;
     dst = &ast_result;
 
