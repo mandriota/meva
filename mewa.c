@@ -644,7 +644,7 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
   DBG_PRINT("lx.tt: %s\n", tt_stringify(pr->lx.tt));
   DBG_PRINT("pr_includes_tt(pr->lx.tt, pt): %d\n", pr_includes_tt(pr->lx.tt, pt));
 
-  while (pr_includes_tt(pr->lx.tt, pt)) { // segfault!
+  while (1) { // segfault!
 	DBG_PRINT("loop entered\n");
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
