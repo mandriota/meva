@@ -45,12 +45,15 @@
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
-#include <readline/history.h>
-#include <readline/readline.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef HAVE_LIBREADLINE
+#include <readline/history.h>
+#include <readline/readline.h>
+#endif
 
 #if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
 #include <unistd.h>
@@ -909,18 +912,23 @@ static struct Node ast_result;
 void _Noreturn repl(struct Parser *pr) {
   struct Node *src, *dst;
 
+#ifdef _READLINE_H_
   using_history();
+#endif
 
   while (true) {
     arena_reset(&default_arena);
+#ifdef _READLINE_H_
     if (pr->lx.rd.page.data != NULL)
       free(pr->lx.rd.page.data);
+#endif
 
     rd_reset_counters(&pr->lx.rd);
 
     src = &ast_source;
     dst = &ast_result;
 
+#ifdef _READLINE_H_
     if ((pr->lx.rd.page.data = readline(REPL_PROMPT)) == NULL)
       PFATAL("cannot read line\n");
 
@@ -929,6 +937,16 @@ void _Noreturn repl(struct Parser *pr) {
       continue;
 
     add_history(pr->lx.rd.page.data);
+#else
+    printf(REPL_PROMPT);
+
+    ssize_t line_len =
+        getline(&pr->lx.rd.page.data, &pr->lx.rd.page.cap, stdin);
+    if (line_len == -1)
+      FATAL("cannot read line\n");
+
+    pr->lx.rd.page.len = (size_t)line_len;
+#endif
 
     enum PR_ERR perr = pr_next_node(pr, &src);
     if (perr != PR_ERR_NOERROR) {

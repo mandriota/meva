@@ -1,7 +1,7 @@
 EXEC := mewa
 
 CC := clang
-LIBS := -lreadline
+LIBS := -lreadline -D HAVE_LIBREADLINE
 CFLAGS := -std=gnu2x
 WARNINGS := -Wall -Wextra -Werror -Wpedantic
 
