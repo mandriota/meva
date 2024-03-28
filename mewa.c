@@ -629,44 +629,44 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
   (*node)->as.bp.a =
     (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  DBG_PRINT("pending primitive 1\n");
+  DBG_PRINT("%s: pending primitive 1\n", __func__);
 
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
 
-  DBG_PRINT("primitive 1 received\n");
+  DBG_PRINT("%s: primitive 1 received\n", __func__);
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
-  DBG_PRINT("entering loop\n");
+  DBG_PRINT("%s: entering loop\n", __func__);
 
-  DBG_PRINT("p0c: %zx\n", pr->p0c);
-  DBG_PRINT("!!!!\n");
-  DBG_PRINT("lx.tt: %s\n", tt_stringify(pr->lx.tt));
-  DBG_PRINT("pr_includes_tt(pr->lx.tt, pt): %d\n", pr_includes_tt(pr->lx.tt, pt));
+  DBG_PRINT("%s: p0c: %zx\n", __func__, pr->p0c);
+  DBG_PRINT("%s: !!!!\n", __func__);
+  DBG_PRINT("%s: lx.tt: %s\n", __func__, tt_stringify(pr->lx.tt));
+  DBG_PRINT("%s: pr_includes_tt(pr->lx.tt, pt): %d\n", __func__, pr_includes_tt(pr->lx.tt, pt));
 
   while (pr_includes_tt(pr->lx.tt, pt)) { // segfault!
-	DBG_PRINT("loop entered\n");
+	DBG_PRINT("%s: loop entered\n", __func__);
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-	DBG_PRINT("b allocated");
+	DBG_PRINT("%s: b allocated", __func__);
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
 
-	DBG_PRINT("pending primitive 2\n");
+	DBG_PRINT("%s: pending primitive 2\n", __func__);
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
-	DBG_PRINT("primitive 2 received\n");
+	DBG_PRINT("%s: primitive 2 received\n", __func__);
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->as.bp.a = node_tmp;
   }
 
-  DBG_PRINT("setting node to node_tmp\n");
+  DBG_PRINT("%s: setting node to node_tmp\n", __func__);
 
   *node = node_tmp;
 
-  DBG_PRINT("node is set to node_tmp\n");
+  DBG_PRINT("%s: node is set to node_tmp\n", __func__);
 
   return PR_ERR_NOERROR;
 }
@@ -676,7 +676,11 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
+  DBG_PRINT("%s: pending primitive 1\n", __func__);
+   
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
+
+  DBG_PRINT("%s: primitive 1 received\n", __func__);
 
   if (pr_includes_tt(pr->lx.tt, pt)) {
     (*node)->as.bp.b =
@@ -694,7 +698,11 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
 
 enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
                         enum Priority pt) {
+  DBG_PRINT("%s: pending primitive 1\n", __func__);
+  
   TRY(PR_ERR, pr_call(pr, node, pt));
+
+  DBG_PRINT("%s: primitive 1 received\n", __func__);
 
   if (pr->lx.tt == TT_RP0) {
     if (--pr->p0c < 0)
