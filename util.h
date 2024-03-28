@@ -70,7 +70,10 @@
 #define DBG(x)
 #else
 #define DBG_PRINT(...)                                                         \
-  fprintf(stderr, CLR_INF_MSG "INFO" CLR_RESET ": " __VA_ARGS__)
+  {                                                                            \
+    fprintf(stderr, CLR_INF_MSG "INFO" CLR_RESET ": " __VA_ARGS__);            \
+    fflush(stderr);                                                            \
+  }
 #define DBG_FATAL(...) FATAL(__VA_ARGS__)
 #define DBG(x) x
 #endif
