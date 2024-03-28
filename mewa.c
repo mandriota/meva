@@ -697,7 +697,9 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
     DBG_PRINT("%s: setting node\n", __func__);
 	DBG_PRINT("%s: node type: %s\n", __func__, nt_stringify((*node)->type));
 	DBG_PRINT("%s: node.a type: %s\n", __func__, nt_stringify((*node)->as.bp.a->type));
-	volatile struct Node tmp = *(*node)->as.bp.a;
+	struct Node * tmp_p = (*node)->as.bp.a;
+	DBG_PRINT("%s: dereferencing ptr\n", __func__);
+	struct Node tmp = *tmp_p;
 	DBG_PRINT("%s: again...\n", __func__);
     **node = tmp; // segfault!
     DBG_PRINT("%s: node set\n", __func__);
