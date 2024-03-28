@@ -661,7 +661,7 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
 	node_tmp = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     *node_tmp = **node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node)->as.bp.a = node_tmp;
+    *(*node)->as.bp.a = *node_tmp;
   }
 
   DBG_PRINT("%s: setting node to node_tmp\n", __func__);
