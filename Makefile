@@ -28,7 +28,7 @@ build: mewa.c arena.c util.c
 
 	@[ -d "./bin" ] || mkdir bin
 
-	$(CC) $(CFLAGS) $(WARNINGS) $(LIBS) -o bin/$(EXEC) mewa.c arena.c util.c
+	$(CC) $(CFLAGS) $(WARNINGS) -o bin/$(EXEC) mewa.c arena.c util.c $(LIBS)
 
 run: build
 	@echo "RUNNING EXECUTABLE"
