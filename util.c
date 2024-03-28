@@ -20,6 +20,7 @@
 
 #include "util.h"
 
+#define _USE_MATH_DEFINES
 #include <assert.h>
 #include <math.h>
 
