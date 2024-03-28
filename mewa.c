@@ -678,11 +678,16 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
   DBG_PRINT("%s: priority: %d\n", __func__, pt);
   DBG_PRINT("%s: pending primitive 1\n", __func__);
   struct Node *tmp_p = (*node)->as.bp.a;
-  DBG_PRINT("%s: dereferencing ptr\n", __func__);
+  DBG_PRINT("%s: dereferencing ptr before call\n", __func__);
   struct Node tmp = *tmp_p;
   DBG_PRINT("%s: dereferenced type: %s\n", __func__, nt_stringify(tmp.type));
 
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
+
+  DBG_PRINT("%s: dereferencing ptr after call\n", __func__);
+  tmp_p = (*node)->as.bp.a;
+  tmp = *tmp_p;
+  DBG_PRINT("%s: dereferenced type: %s\n", __func__, nt_stringify(tmp.type));
 
   DBG_PRINT("%s: primitive 1 received\n", __func__);
 
