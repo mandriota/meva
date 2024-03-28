@@ -51,7 +51,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
 #include <unistd.h>
+#elif defined(_WIN32) || defined(WIN32)
+#include <io.h>
+#define isatty(h) _isatty(h)
+#else
+#define isatty(h) 1
+#warning cannot find isatty implementation, \
+therefore, Mewa will always start REPL \
+when no command line arguments are passed
+#endif
 
 //=:config:invariant
 #if INTERNAL_READING_BUF_SIZE < 1
