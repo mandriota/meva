@@ -394,7 +394,7 @@ struct BiOp {
 
 struct Node {
   enum NodeType type;
-
+ 
   union {
     union Primitive pm;
     struct UnOp up;
@@ -538,7 +538,7 @@ bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
 enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
-    return pr_rl_biop_next_node(pr, node, PT_LET0);
+    return pr_lr_biop_next_node(pr, node, PT_LET0);
   case PT_LET0:
     return pr_lr_biop_next_node(pr, node, PT_ADD_SUB);
   case PT_LET1:
@@ -576,12 +576,9 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
     lx_next_token(&pr->lx);
     break;
   case TT_INT:
-    DBG_PRINT("setting int node\n");
     (*node)->type = NT_PRIM_INT;
     (*node)->as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
-
-    DBG_PRINT("int node set\n");
     break;
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
@@ -610,16 +607,18 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
 
 enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
+  struct Node *node_tmp = *node;
+
   if (pr_includes_tt(pr->lx.tt, pt)) {
-    (*node)->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
-                    NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
-    (*node)->as.up.a =
+    node_tmp->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
+                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
+    node_tmp->as.up.a =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node) = (*node)->as.up.a;
+    node_tmp = node_tmp->as.up.a;
     lx_next_token(&pr->lx);
   }
 
-  return pr_call(pr, node, pt);
+  return pr_call(pr, &node_tmp, pt);
 }
 
 enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
@@ -627,45 +626,24 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  DBG_PRINT("%s: pending primitive 1\n", __func__);
-
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
-
-  DBG_PRINT("%s: primitive 1 received\n", __func__);
 
   struct Node *node_tmp = (*node)->as.bp.a;
 
-  DBG_PRINT("%s: entering loop\n", __func__);
-
-  DBG_PRINT("%s: p0c: %zx\n", __func__, pr->p0c);
-  DBG_PRINT("%s: !!!!\n", __func__);
-  DBG_PRINT("%s: lx.tt: %s\n", __func__, tt_stringify(pr->lx.tt));
-  DBG_PRINT("%s: pr_includes_tt(pr->lx.tt, pt): %d\n", __func__,
-            pr_includes_tt(pr->lx.tt, pt));
-
-  while (pr_includes_tt(pr->lx.tt, pt)) { // segfault!
-    DBG_PRINT("%s: loop entered\n", __func__);
+  while (pr_includes_tt(pr->lx.tt, pt)) {
     (*node)->type = (enum NodeType)pr->lx.tt;
     (*node)->as.bp.b =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    DBG_PRINT("%s: b allocated", __func__);
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
-
-    DBG_PRINT("%s: pending primitive 2\n", __func__);
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
-    DBG_PRINT("%s: primitive 2 received\n", __func__);
 
     node_tmp = *node;
     *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     (*node)->as.bp.a = node_tmp;
   }
 
-  DBG_PRINT("%s: setting node to node_tmp\n", __func__);
-
   *node = node_tmp;
-
-  DBG_PRINT("%s: node is set to node_tmp\n", __func__);
 
   return PR_ERR_NOERROR;
 }
@@ -675,21 +653,7 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
   (*node)->as.bp.a =
       (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
-  DBG_PRINT("%s: priority: %d\n", __func__, pt);
-  DBG_PRINT("%s: pending primitive 1\n", __func__);
-  struct Node *tmp_p = (*node)->as.bp.a;
-  DBG_PRINT("%s: dereferencing ptr before call\n", __func__);
-  struct Node tmp = *tmp_p;
-  DBG_PRINT("%s: dereferenced type: %s\n", __func__, nt_stringify(tmp.type));
-
   TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
-
-  DBG_PRINT("%s: dereferencing ptr after call\n", __func__);
-  tmp_p = (*node)->as.bp.a;
-  tmp = *tmp_p;
-  DBG_PRINT("%s: dereferenced type: %s\n", __func__, nt_stringify(tmp.type));
-
-  DBG_PRINT("%s: primitive 1 received\n", __func__);
 
   if (pr_includes_tt(pr->lx.tt, pt)) {
     (*node)->as.bp.b =
@@ -699,32 +663,15 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
     lx_next_token(&pr->lx);
 
     TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
-  } else {
-    DBG_PRINT("%s: priority: %d\n", __func__, pt);
-    DBG_PRINT("%s: setting node\n", __func__);
-    DBG_PRINT("%s: node type: %s\n", __func__, nt_stringify((*node)->type));
-    DBG_PRINT("%s: node.a type: %s\n", __func__,
-              nt_stringify((*node)->as.bp.a->type));
-    struct Node *tmp_p = (*node)->as.bp.a;
-    DBG_PRINT("%s: dereferencing ptr\n", __func__);
-    struct Node tmp = *tmp_p;
-    DBG_PRINT("%s: again...\n", __func__);
-    **node = tmp; // segfault!
-    DBG_PRINT("%s: node set\n", __func__);
-  }
-
-  DBG_PRINT("%s: returning\n", __func__);
+  } else
+    **node = *(*node)->as.bp.a;
 
   return PR_ERR_NOERROR;
 }
 
 enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
                         enum Priority pt) {
-  DBG_PRINT("%s: pending primitive 1\n", __func__);
-
   TRY(PR_ERR, pr_call(pr, node, pt));
-
-  DBG_PRINT("%s: primitive 1 received\n", __func__);
 
   if (pr->lx.tt == TT_RP0) {
     if (--pr->p0c < 0)
@@ -977,6 +924,9 @@ _Noreturn void repl(struct Parser *pr) {
 
     rd_reset_counters(&pr->lx.rd);
 
+    src = &ast_source;
+    dst = &ast_result;
+
 #ifdef _READLINE_H_
     if ((pr->lx.rd.page.data = readline(REPL_PROMPT)) == NULL)
       PFATAL("cannot read line\n");
@@ -996,9 +946,6 @@ _Noreturn void repl(struct Parser *pr) {
 
     pr->lx.rd.page.len = (size_t)line_len;
 #endif
-
-    src = &ast_source;
-    dst = &ast_result;
 
     enum PR_ERR perr = pr_next_node(pr, &src);
     if (perr != PR_ERR_NOERROR) {
@@ -1044,7 +991,6 @@ int main(int argc, char *argv[]) {
                               .cap = 0,
                           },
                   },
-              .tt = 0,
           },
       .p0c = 0,
   };
@@ -1067,7 +1013,8 @@ int main(int argc, char *argv[]) {
     pr.lx.rd.src = stdin;
 
     pr.lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
-    pr.lx.rd.page.data = arena_acquire(&principal_arena, pr.lx.rd.page.cap);
+    pr.lx.rd.page.data =
+        (char *)arena_acquire(&principal_arena, pr.lx.rd.page.cap);
   }
 
   rd_reset_counters(&pr.lx.rd);
