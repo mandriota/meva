@@ -538,7 +538,7 @@ bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
 enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
-    return pr_lr_biop_next_node(pr, node, PT_LET0);
+    return pr_rl_biop_next_node(pr, node, PT_LET0);
   case PT_LET0:
     return pr_lr_biop_next_node(pr, node, PT_ADD_SUB);
   case PT_LET1:
@@ -612,8 +612,10 @@ enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
     (*node)->as.up.arg =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    node = &(*node)->as.up.arg;
+
     lx_next_token(&pr->lx);
+
+    node = &(*node)->as.up.arg;
   }
 
   return pr_call(pr, node, pt);
@@ -631,10 +633,11 @@ enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
     node_p->as.bp.l_arg = *node;
     node_p->as.bp.r_arg =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
-
     TRY(PR_ERR, pr_call(pr, &node_p->as.bp.r_arg, pt));
+
     *node = node_p;
   }
 
@@ -655,8 +658,8 @@ enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
 
     lx_next_token(&pr->lx);
-
     TRY(PR_ERR, pr_call(pr, &node_p->as.bp.r_arg, pt + 1));
+
     *node = node_p;
   }
 
