@@ -716,7 +716,7 @@ const char *ir_err_stringify(enum IR_ERR ir_err) {
   return STRINGIFY(INVALID_IR_ERR);
 }
 
-enum IR_ERR ir_exec(struct Node **dst, struct Node *src);
+enum IR_ERR ir_exec(struct Node *dst, struct Node *src);
 
 enum IR_ERR ir_unop_exec_int(struct Node *dst, enum NodeType op,
                              union Primitive a) {
@@ -752,16 +752,16 @@ enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_unop_exec(struct Node **dst, struct Node *src) {
+enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
   TRY(IR_ERR, ir_exec(dst, src->as.up.arg));
-  enum NodeType node_a_type = (*dst)->type;
-  union Primitive node_a_value = (*dst)->as.pm;
+  enum NodeType node_a_type = dst->type;
+  union Primitive node_a_value = dst->as.pm;
 
   if (node_a_type == NT_PRIM_INT)
-    return ir_unop_exec_int(*dst, src->type, node_a_value);
+    return ir_unop_exec_int(dst, src->type, node_a_value);
 
   if (node_a_type == NT_PRIM_FLT)
-    return ir_unop_exec_flt(*dst, src->type, node_a_value);
+    return ir_unop_exec_flt(dst, src->type, node_a_value);
 
   return IR_ERR_INT_OR_FLT_ARG_EXPECTED;
 }
@@ -848,14 +848,14 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_biop_exec(struct Node **dst, struct Node *src) {
+enum IR_ERR ir_biop_exec(struct Node *dst, struct Node *src) {
   TRY(IR_ERR, ir_exec(dst, src->as.bp.l_arg));
-  enum NodeType node_a_type = (*dst)->type;
-  union Primitive node_a_value = (*dst)->as.pm;
+  enum NodeType node_a_type = dst->type;
+  union Primitive node_a_value = dst->as.pm;
 
   ir_exec(dst, src->as.bp.r_arg);
-  enum NodeType node_b_type = (*dst)->type;
-  union Primitive node_b_value = (*dst)->as.pm;
+  enum NodeType node_b_type = dst->type;
+  union Primitive node_b_value = dst->as.pm;
 
   if (node_a_type == NT_PRIM_FLT && node_b_type == NT_PRIM_INT) {
     node_b_type = NT_PRIM_FLT;
@@ -868,20 +868,20 @@ enum IR_ERR ir_biop_exec(struct Node **dst, struct Node *src) {
   }
 
   if (node_a_type == NT_PRIM_FLT)
-    TRY(IR_ERR, ir_biop_exec_flt(*dst, src->type, node_a_value, node_b_value));
+    TRY(IR_ERR, ir_biop_exec_flt(dst, src->type, node_a_value, node_b_value));
 
   if (node_a_type == NT_PRIM_INT)
-    TRY(IR_ERR, ir_biop_exec_int(*dst, src->type, node_a_value, node_b_value));
+    TRY(IR_ERR, ir_biop_exec_int(dst, src->type, node_a_value, node_b_value));
 
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_exec(struct Node **dst, struct Node *src) {
+enum IR_ERR ir_exec(struct Node *dst, struct Node *src) {
   switch (src->type) {
   case NT_PRIM_SYM:
   case NT_PRIM_INT:
   case NT_PRIM_FLT:
-    *dst = src;
+    *dst = *src;
     break;
   case NT_UNOP_NOP:
   case NT_UNOP_NEG:
@@ -956,7 +956,7 @@ _Noreturn void repl(struct Parser *pr) {
                   SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-    enum IR_ERR ierr = ir_exec(&dst, src);
+    enum IR_ERR ierr = ir_exec(dst, src);
     if (ierr != IR_ERR_NOERROR) {
       ERROR(CLR_INTERNAL "%s" CLR_RESET " (%d)\n", ir_err_stringify(ierr),
             ierr);
@@ -1022,7 +1022,7 @@ int main(int argc, char *argv[]) {
   nd_tree_print(src, SOURCE_INDENTATION, SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-  enum IR_ERR ierr = ir_exec(&dst, src);
+  enum IR_ERR ierr = ir_exec(dst, src);
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
