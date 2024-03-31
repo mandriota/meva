@@ -33,7 +33,7 @@
 //    (_)          | |         | |
 //     _ _ __   ___| |_   _  __| | ___  ___
 //    | | '_ \ / __| | | | |/ _` |/ _ \/ __|
-//    | | | | | (__| | |_| | (_| |  __/\__ -
+//    | | | | | (__| | |_| | (_| |  __/\__ ;
 //    |_|_| |_|\___|_|\__,_|\__,_|\___||___/
 
 #include "config.h"
@@ -450,6 +450,42 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   }
 }
 
+//=:parser:priority
+enum Priority {
+  PT_SKIP_RP0,
+  PT_LET0,
+  PT_LET1,
+  PT_ADD_SUB,
+  PT_MUL_QUO_MOD,
+  PT_NOP_NEG,
+  PT_POW0,
+  PT_POW1,
+  PT_FAC,
+  PT_PRIM,
+};
+
+bool pt_includes_tt(enum Priority pt, enum TokenType tt) {
+  switch (pt) {
+  case PT_LET0:
+    return tt == TT_LET;
+  case PT_ADD_SUB:
+    return tt == TT_ADD || tt == TT_SUB;
+  case PT_MUL_QUO_MOD:
+    return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
+  case PT_NOP_NEG:
+    return tt == TT_SUB || tt == TT_ADD;
+  case PT_POW0:
+    return tt == TT_POW;
+  case PT_FAC:
+    return tt == TT_FAC;
+  default:
+    DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
+    return false;
+  }
+}
+
+bool pt_rl_biop(enum Priority pt) { return pt == PT_LET0 || pt == PT_POW0; }
+
 //=:parser:parser
 struct Parser {
   struct Lexer lx;
@@ -483,54 +519,6 @@ const char *pr_err_stringify(enum PR_ERR pr_err) {
   }
 
   return STRINGIFY(INVALID_PR_ERR);
-}
-
-enum Priority {
-  PT_SKIP_RP0,
-  PT_LET0,
-  PT_LET1,
-  PT_ADD_SUB,
-  PT_MUL_QUO_MOD,
-  PT_NOP_NEG,
-  PT_POW0,
-  PT_POW1,
-  PT_FAC,
-  PT_PRIM,
-};
-
-bool pr_includes_tt(enum TokenType tt, enum Priority pt) {
-  switch (pt) {
-  case PT_LET0:
-    return tt == TT_LET;
-  case PT_ADD_SUB:
-    return tt == TT_ADD || tt == TT_SUB;
-  case PT_MUL_QUO_MOD:
-    return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
-  case PT_NOP_NEG:
-    return tt == TT_SUB || tt == TT_ADD;
-  case PT_POW0:
-    return tt == TT_POW;
-  case PT_FAC:
-    return tt == TT_FAC;
-  default:
-    DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
-    return false;
-  }
-}
-
-int pr_pt_step(enum Priority pt) {
-  switch (pt) {
-  case PT_LET0:
-  case PT_POW0:
-    return 1;
-  case PT_ADD_SUB:
-  case PT_MUL_QUO_MOD:
-  case PT_FAC:
-    return 0;
-  default:
-    DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
-	return 0;
-  }
 }
 
 enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt);
@@ -574,8 +562,8 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
 }
 
 enum PR_ERR pr_unop_next_node(struct Parser *pr, struct Node **node,
-                                 enum Priority pt) {
-  if (pr_includes_tt(pr->lx.tt, pt)) {
+                              enum Priority pt) {
+  if (pt_includes_tt(pt, pr->lx.tt)) {
     (*node)->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
     (*node)->as.up.arg =
@@ -590,12 +578,12 @@ enum PR_ERR pr_unop_next_node(struct Parser *pr, struct Node **node,
 }
 
 enum PR_ERR pr_biop_next_node(struct Parser *pr, struct Node **node,
-                                 enum Priority pt) {
+                              enum Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
   struct Node *node_p;
 
-  while (pr_includes_tt(pr->lx.tt, pt)) {
+  while (pt_includes_tt(pt, pr->lx.tt)) {
     node_p = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     node_p->type = (enum NodeType)pr->lx.tt;
     node_p->as.bp.l_arg = *node;
@@ -604,7 +592,7 @@ enum PR_ERR pr_biop_next_node(struct Parser *pr, struct Node **node,
 
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_call(pr, &node_p->as.bp.r_arg, pt + pr_pt_step(pt)));
+    TRY(PR_ERR, pr_call(pr, &node_p->as.bp.r_arg, pt + pt_rl_biop(pt)));
 
     *node = node_p;
   }
@@ -628,7 +616,7 @@ enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
 
 enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
   lx_next_token(&pr->lx);
-  TRY(PR_ERR, pr_call(pr, node, 00));
+  TRY(PR_ERR, pr_call(pr, node, 0));
 
   return PR_ERR_NOERROR;
 }
