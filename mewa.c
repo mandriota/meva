@@ -385,16 +385,16 @@ const char *nt_stringify(enum NodeType nt) {
 struct Node; // IWYU pragma: keep
 
 struct UnOp {
-  struct Node *a;
+  struct Node *arg;
 };
 
 struct BiOp {
-  struct Node *a, *b;
+  struct Node *l_arg, *r_arg;
 };
 
 struct Node {
   enum NodeType type;
- 
+
   union {
     union Primitive pm;
     struct UnOp up;
@@ -439,13 +439,13 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   case NT_BIOP_POW:
   case NT_BIOP_FAC:
     printf("\n");
-    nd_tree_print(node->as.bp.a, depth + 1, depth_max);
-    nd_tree_print(node->as.bp.b, depth + 1, depth_max);
+    nd_tree_print(node->as.bp.l_arg, depth + 1, depth_max);
+    nd_tree_print(node->as.bp.r_arg, depth + 1, depth_max);
     return;
   case NT_UNOP_NEG:
   case NT_UNOP_NOP:
     printf("\n");
-    nd_tree_print(node->as.up.a, depth + 1, depth_max);
+    nd_tree_print(node->as.up.arg, depth + 1, depth_max);
     return;
   }
 }
@@ -607,64 +607,58 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
 
 enum PR_ERR pr_rl_unop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
-  struct Node *node_tmp = *node;
-
   if (pr_includes_tt(pr->lx.tt, pt)) {
-    node_tmp->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
-                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
-    node_tmp->as.up.a =
+    (*node)->type = NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
+                    NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
+    (*node)->as.up.arg =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    node_tmp = node_tmp->as.up.a;
+    node = &(*node)->as.up.arg;
     lx_next_token(&pr->lx);
   }
 
-  return pr_call(pr, &node_tmp, pt);
+  return pr_call(pr, node, pt);
 }
 
 enum PR_ERR pr_lr_biop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
-  (*node)->as.bp.a =
-      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+  TRY(PR_ERR, pr_call(pr, node, pt));
 
-  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
-
-  struct Node *node_tmp = (*node)->as.bp.a;
+  struct Node *node_p;
 
   while (pr_includes_tt(pr->lx.tt, pt)) {
-    (*node)->type = (enum NodeType)pr->lx.tt;
-    (*node)->as.bp.b =
+    node_p = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    node_p->type = (enum NodeType)pr->lx.tt;
+    node_p->as.bp.l_arg = *node;
+    node_p->as.bp.r_arg =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt));
 
-    node_tmp = *node;
-    *node = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node)->as.bp.a = node_tmp;
+    TRY(PR_ERR, pr_call(pr, &node_p->as.bp.r_arg, pt));
+    *node = node_p;
   }
-
-  *node = node_tmp;
 
   return PR_ERR_NOERROR;
 }
 
 enum PR_ERR pr_rl_biop_next_node(struct Parser *pr, struct Node **node,
                                  enum Priority pt) {
-  (*node)->as.bp.a =
-      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+  TRY(PR_ERR, pr_call(pr, node, pt));
 
-  TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.a, pt));
+  struct Node *node_p;
 
   if (pr_includes_tt(pr->lx.tt, pt)) {
-    (*node)->as.bp.b =
+    node_p = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    node_p->type = (enum NodeType)pr->lx.tt;
+    node_p->as.bp.l_arg = *node;
+    node_p->as.bp.r_arg =
         (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-    (*node)->type = (enum NodeType)pr->lx.tt;
 
     lx_next_token(&pr->lx);
 
-    TRY(PR_ERR, pr_call(pr, &(*node)->as.bp.b, pt + 1));
-  } else
-    **node = *(*node)->as.bp.a;
+    TRY(PR_ERR, pr_call(pr, &node_p->as.bp.r_arg, pt + 1));
+    *node = node_p;
+  }
 
   return PR_ERR_NOERROR;
 }
@@ -759,7 +753,7 @@ enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
 }
 
 enum IR_ERR ir_unop_exec(struct Node **dst, struct Node *src) {
-  TRY(IR_ERR, ir_exec(dst, src->as.up.a));
+  TRY(IR_ERR, ir_exec(dst, src->as.up.arg));
   enum NodeType node_a_type = (*dst)->type;
   union Primitive node_a_value = (*dst)->as.pm;
 
@@ -855,11 +849,11 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
 }
 
 enum IR_ERR ir_biop_exec(struct Node **dst, struct Node *src) {
-  TRY(IR_ERR, ir_exec(dst, src->as.bp.a));
+  TRY(IR_ERR, ir_exec(dst, src->as.bp.l_arg));
   enum NodeType node_a_type = (*dst)->type;
   union Primitive node_a_value = (*dst)->as.pm;
 
-  ir_exec(dst, src->as.bp.b);
+  ir_exec(dst, src->as.bp.r_arg);
   enum NodeType node_b_type = (*dst)->type;
   union Primitive node_b_value = (*dst)->as.pm;
 
