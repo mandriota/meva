@@ -55,7 +55,6 @@ struct Chunk *chunk_alloc(size_t sz) {
 }
 
 void *arena_acquire(struct Arena *arena, size_t sz) {
-  DBG_PRINT("allocating %zu bytes\n", sz);
   if (arena->head == NULL) {
     arena->head = chunk_alloc(sz);
     return arena->head->data;
