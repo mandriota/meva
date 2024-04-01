@@ -733,8 +733,10 @@ enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
       return PR_ERR_PAREN_NOT_OPENED;
 
     lx_next_token(&pr->lx);
-  } else if (pr->lx.tt == TT_ABS)
+  } else if (pr->lx.tt == TT_ABS) {
+	pr->abs = false;
 	lx_next_token(&pr->lx);
+  }
 
   return PR_ERR_NOERROR;
 }
@@ -1070,6 +1072,8 @@ _Noreturn void repl(struct Parser *pr) {
 #endif
 
     rd_reset_counters(&pr->lx.rd);
+	pr->p0c = 0;
+	pr->abs = false;
 
     source_p = &source;
     result_p = &result;
