@@ -34,7 +34,7 @@ struct Chunk {
 
   bool used : 1;
 
-  size_t size : 63;
+  size_t size : sizeof(size_t) - 1;
   size_t data[];
 };
 
@@ -71,7 +71,7 @@ void *arena_acquire(struct Arena *arena, size_t sz) {
     chunk_p->used = true;
     return chunk_p->data;
   }
-  
+
   chunk_p->next = chunk_alloc(sz);
   return chunk_p->next->data;
 }
