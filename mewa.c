@@ -209,6 +209,8 @@ enum TokenType {
   TT_LP0 = '(',
   TT_RP0 = ')',
 
+  TT_ABS = '|',
+
   TT_EOX = ';',
 };
 
@@ -237,6 +239,7 @@ const char *tt_stringify(enum TokenType tt) {
     STRINGIFY_CASE(TT_FAC)
     STRINGIFY_CASE(TT_LP0)
     STRINGIFY_CASE(TT_RP0)
+    STRINGIFY_CASE(TT_ABS)
     STRINGIFY_CASE(TT_EOX)
   }
 
@@ -350,8 +353,10 @@ void lx_next_token(struct Lexer *lx) {
     rd_next_char(&lx->rd);
     if (lx->rd.cc == '|') {
       lx->tt = TT_ORR;
-    } else
+    } else {
+      lx->tt = TT_ABS;
       rd_prev(&lx->rd);
+    }
     return;
   case '>':
     rd_next_char(&lx->rd);
@@ -432,6 +437,8 @@ enum NodeType {
   NT_UNOP_NOP,
   NT_UNOP_NEG,
 
+  NT_UNOP_ABS = TT_ABS,
+
   NT_BIOP_POW = TT_POW,
 };
 
@@ -458,6 +465,7 @@ const char *nt_stringify(enum NodeType nt) {
     STRINGIFY_CASE(NT_UNOP_NOT)
     STRINGIFY_CASE(NT_UNOP_NOP)
     STRINGIFY_CASE(NT_UNOP_NEG)
+    STRINGIFY_CASE(NT_UNOP_ABS)
     STRINGIFY_CASE(NT_BIOP_POW)
   }
 
@@ -535,6 +543,7 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   case NT_UNOP_NOT:
   case NT_UNOP_NEG:
   case NT_UNOP_NOP:
+  case NT_UNOP_ABS:
     printf("\n");
     nd_tree_print(node->as.up.arg, depth + 1, depth_max);
     return;
@@ -592,6 +601,7 @@ struct Parser {
   struct Lexer lx;
 
   ssize_t p0c;
+  bool abs;
 };
 
 enum PR_ERR {
@@ -603,6 +613,7 @@ enum PR_ERR {
   PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED,
   PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED,
   PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED,
+  PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED,
   PR_ERR_TOKEN_UNEXPECTED,
 };
 
@@ -616,6 +627,7 @@ const char *pr_err_stringify(enum PR_ERR pr_err) {
     STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED)
+    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_TOKEN_UNEXPECTED)
   }
 
@@ -647,6 +659,15 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
     (*node)->as.pm.n_flt = pr->lx.pm.n_flt;
     lx_next_token(&pr->lx);
     break;
+  case TT_ABS:
+    if (pr->abs)
+      return PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED;
+    pr->abs = true;
+    (*node)->type = NT_UNOP_ABS;
+    (*node)->as.up.arg =
+      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+	lx_next_token(&pr->lx);
+    return pr_call(pr, &(*node)->as.up.arg, pt);
   case TT_LP0:
     ++pr->p0c;
     lx_next_token(&pr->lx);
@@ -712,7 +733,8 @@ enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
       return PR_ERR_PAREN_NOT_OPENED;
 
     lx_next_token(&pr->lx);
-  }
+  } else if (pr->lx.tt == TT_ABS)
+	lx_next_token(&pr->lx);
 
   return PR_ERR_NOERROR;
 }
@@ -805,6 +827,9 @@ enum IR_ERR ir_unop_exec_int(struct Node *dst, enum NodeType op,
   case NT_UNOP_NEG:
     dst->as.pm.n_int = -a.n_int;
     break;
+  case NT_UNOP_ABS:
+	dst->as.pm.n_int = a.n_int < 0 ? -a.n_int : a.n_int;
+	break;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -822,6 +847,9 @@ enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
   case NT_UNOP_NEG:
     dst->as.pm.n_flt = -a.n_flt;
     break;
+  case NT_UNOP_ABS:
+	dst->as.pm.n_flt = fabsl(a.n_flt);
+	break;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -919,27 +947,27 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
 
   switch (op) {
   case NT_BIOP_GRE:
-	dst->type = NT_PRIM_INT;
+    dst->type = NT_PRIM_INT;
     dst->as.pm.n_int = a.n_flt > b.n_flt;
     break;
   case NT_BIOP_LES:
-	dst->type = NT_PRIM_INT;
+    dst->type = NT_PRIM_INT;
     dst->as.pm.n_int = a.n_flt < b.n_flt;
     break;
   case NT_BIOP_GEQ:
-	dst->type = NT_PRIM_INT;
+    dst->type = NT_PRIM_INT;
     dst->as.pm.n_int = a.n_flt >= b.n_flt;
     break;
   case NT_BIOP_LEQ:
-	dst->type = NT_PRIM_INT;
+    dst->type = NT_PRIM_INT;
     dst->as.pm.n_int = a.n_flt <= b.n_flt;
     break;
   case NT_BIOP_EQU:
-	dst->type = NT_PRIM_INT;
+    dst->type = NT_PRIM_INT;
     dst->as.pm.n_int = a.n_flt == b.n_flt;
     break;
   case NT_BIOP_NEQ:
-	dst->type = NT_PRIM_INT;
+    dst->type = NT_PRIM_INT;
     dst->as.pm.n_int = a.n_flt != b.n_flt;
     break;
   case NT_BIOP_ADD:
@@ -1008,9 +1036,10 @@ enum IR_ERR ir_exec(struct Node *dst, struct Node *src) {
   case NT_PRIM_FLT:
     *dst = *src;
     break;
+  case NT_UNOP_NOT:
   case NT_UNOP_NOP:
   case NT_UNOP_NEG:
-  case NT_UNOP_NOT:
+  case NT_UNOP_ABS:
     return ir_unop_exec(dst, src);
   default:
     return ir_biop_exec(dst, src);
@@ -1025,11 +1054,9 @@ enum IR_ERR ir_exec(struct Node *dst, struct Node *src) {
 //    | |_| \__ \  __/ |
 //     \__,_|___/\___|_|
 
-static struct Node ast_source;
-static struct Node ast_result;
-
 _Noreturn void repl(struct Parser *pr) {
-  struct Node *src, *dst;
+  struct Node source, result;
+  struct Node *source_p, *result_p;
 
 #ifdef _READLINE_H_
   using_history();
@@ -1044,8 +1071,8 @@ _Noreturn void repl(struct Parser *pr) {
 
     rd_reset_counters(&pr->lx.rd);
 
-    src = &ast_source;
-    dst = &ast_result;
+    source_p = &source;
+    result_p = &result;
 
 #ifdef _READLINE_H_
     if ((pr->lx.rd.page.data = readline(REPL_PROMPT)) == NULL)
@@ -1067,7 +1094,7 @@ _Noreturn void repl(struct Parser *pr) {
     pr->lx.rd.page.len = (size_t)line_len;
 #endif
 
-    enum PR_ERR perr = pr_next_node(pr, &src);
+    enum PR_ERR perr = pr_next_node(pr, &source_p);
     if (perr != PR_ERR_NOERROR) {
       ERROR("%zu:%zu: " CLR_INTERNAL "%s" CLR_RESET
             " (%d) [token: " CLR_INTERNAL "%s" CLR_RESET " (%d)]\n",
@@ -1078,11 +1105,11 @@ _Noreturn void repl(struct Parser *pr) {
     }
 
 #ifndef NDEBUG
-    nd_tree_print(src, SOURCE_INDENTATION,
+    nd_tree_print(source_p, SOURCE_INDENTATION,
                   SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-    enum IR_ERR ierr = ir_exec(dst, src);
+    enum IR_ERR ierr = ir_exec(result_p, source_p);
     if (ierr != IR_ERR_NOERROR) {
       ERROR(CLR_INTERNAL "%s" CLR_RESET " (%d)\n", ir_err_stringify(ierr),
             ierr);
@@ -1090,7 +1117,7 @@ _Noreturn void repl(struct Parser *pr) {
     }
 
     printf(REPL_RESULT_PREFIX);
-    nd_tree_print(dst, RESULT_INDENTATION,
+    nd_tree_print(result_p, RESULT_INDENTATION,
                   RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
     printf(REPL_RESULT_SUFFIX);
@@ -1113,10 +1140,8 @@ int main(int argc, char *argv[]) {
                   },
           },
       .p0c = 0,
+	  .abs = false,
   };
-
-  struct Node *src = &ast_source;
-  struct Node *dst = &ast_result;
 
   static struct Arena principal_arena = {.head = NULL};
 
@@ -1139,21 +1164,25 @@ int main(int argc, char *argv[]) {
 
   rd_reset_counters(&pr.lx.rd);
 
-  enum PR_ERR perr = pr_next_node(&pr, &src);
+  struct Node *source_p = &(struct Node){0};
+  struct Node *result_p = &(struct Node){0};
+
+  enum PR_ERR perr = pr_next_node(&pr, &source_p);
   if (perr != PR_ERR_NOERROR)
     FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
           pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
 
 #ifndef NDEBUG
-  nd_tree_print(src, SOURCE_INDENTATION, SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
+  nd_tree_print(source_p, SOURCE_INDENTATION, SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-  enum IR_ERR ierr = ir_exec(dst, src);
+  enum IR_ERR ierr = ir_exec(result_p, source_p);
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
   printf(PIPE_RESULT_PREFIX);
-  nd_tree_print(dst, RESULT_INDENTATION, RESULT_INDENTATION + RESULT_MAX_DEPTH);
+  nd_tree_print(result_p, RESULT_INDENTATION,
+                RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
   printf(PIPE_RESULT_SUFFIX);
   fclose(pr.lx.rd.src);
