@@ -664,9 +664,8 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
       return PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED;
     pr->abs = true;
     (*node)->type = NT_UNOP_ABS;
-    (*node)->as.up.arg =
-      (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
-	lx_next_token(&pr->lx);
+    (*node)->as.up.arg = ARENA_NEW(&default_arena, struct Node);
+    lx_next_token(&pr->lx);
     return pr_call(pr, &(*node)->as.up.arg, pt);
   case TT_LP0:
     ++pr->p0c;
@@ -690,8 +689,7 @@ enum PR_ERR pr_unop_next_node(struct Parser *pr, struct Node **node,
                     NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
 
-    (*node)->as.up.arg =
-        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    (*node)->as.up.arg = ARENA_NEW(&default_arena, struct Node);
 
     lx_next_token(&pr->lx);
 
@@ -708,11 +706,10 @@ enum PR_ERR pr_biop_next_node(struct Parser *pr, struct Node **node,
   struct Node *node_p;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
-    node_p = (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    node_p = ARENA_NEW(&default_arena, struct Node);
     node_p->type = (enum NodeType)pr->lx.tt;
     node_p->as.bp.l_arg = *node;
-    node_p->as.bp.r_arg =
-        (struct Node *)arena_acquire(&default_arena, sizeof(struct Node));
+    node_p->as.bp.r_arg = ARENA_NEW(&default_arena, struct Node);
 
     if (pr->lx.tt != TT_FAC)
       lx_next_token(&pr->lx);
@@ -734,8 +731,8 @@ enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
 
     lx_next_token(&pr->lx);
   } else if (pr->lx.tt == TT_ABS) {
-	pr->abs = false;
-	lx_next_token(&pr->lx);
+    pr->abs = false;
+    lx_next_token(&pr->lx);
   }
 
   return PR_ERR_NOERROR;
@@ -830,8 +827,8 @@ enum IR_ERR ir_unop_exec_int(struct Node *dst, enum NodeType op,
     dst->as.pm.n_int = -a.n_int;
     break;
   case NT_UNOP_ABS:
-	dst->as.pm.n_int = a.n_int < 0 ? -a.n_int : a.n_int;
-	break;
+    dst->as.pm.n_int = a.n_int < 0 ? -a.n_int : a.n_int;
+    break;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -850,8 +847,8 @@ enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
     dst->as.pm.n_flt = -a.n_flt;
     break;
   case NT_UNOP_ABS:
-	dst->as.pm.n_flt = fabsl(a.n_flt);
-	break;
+    dst->as.pm.n_flt = fabsl(a.n_flt);
+    break;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -1072,8 +1069,8 @@ _Noreturn void repl(struct Parser *pr) {
 #endif
 
     rd_reset_counters(&pr->lx.rd);
-	pr->p0c = 0;
-	pr->abs = false;
+    pr->p0c = 0;
+    pr->abs = false;
 
     source_p = &source;
     result_p = &result;
@@ -1144,7 +1141,7 @@ int main(int argc, char *argv[]) {
                   },
           },
       .p0c = 0,
-	  .abs = false,
+      .abs = false,
   };
 
   static struct Arena principal_arena = {.head = NULL};
@@ -1177,7 +1174,8 @@ int main(int argc, char *argv[]) {
           pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
 
 #ifndef NDEBUG
-  nd_tree_print(source_p, SOURCE_INDENTATION, SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
+  nd_tree_print(source_p, SOURCE_INDENTATION,
+                SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
   enum IR_ERR ierr = ir_exec(result_p, source_p);

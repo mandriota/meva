@@ -31,6 +31,11 @@
 //    | |_| | |_| | |
 //     \__,_|\__|_|_|
 
+//=:util:memory
+size_t align(size_t sz, size_t alignment) {
+  return sz + (alignment - ((sz - 1) & (alignment - 1))) - 1;
+}
+
 //=:util:encoding
 unt_t encode_symbol_c(char c) {
   if (IS_UPPER(c))

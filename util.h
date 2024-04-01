@@ -122,6 +122,9 @@ typedef unsigned long long unt_t;
 #define ENC_OFF ('Z' - 'A' + 1)
 #endif
 
+//=:util:memory
+size_t align(size_t sz, size_t alignment);
+
 //=:util:encoding
 unt_t encode_symbol_c(char c);
 

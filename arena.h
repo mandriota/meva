@@ -27,14 +27,14 @@ struct Arena {
   struct Chunk *head;
 };
 
-void *arena_acquire(struct Arena *arena, size_t sz);
-
-void *arena_reacquire(struct Arena *arena, void *data, size_t sz);
+void *arena_acquire(struct Arena *arena, size_t count);
 
 void arena_release(void *data);
 
 void arena_reset(struct Arena *arena);
 
 void arena_dealloc(struct Arena *arena);
+
+#define ARENA_NEW(arena, type) ((type *)arena_acquire(arena, sizeof(type)))
 
 #endif

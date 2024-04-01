@@ -25,10 +25,6 @@
 #include <assert.h>
 #include <stdbool.h> // IWYU pragma: keep
 
-size_t align(size_t sz, size_t alignment) {
-  return sz + (alignment - ((sz - 1) & (alignment - 1))) - 1;
-}
-
 struct Chunk {
   struct Chunk *next;
 
@@ -74,18 +70,6 @@ void *arena_acquire(struct Arena *arena, size_t sz) {
 
   chunk_p->next = chunk_alloc(sz);
   return chunk_p->next->data;
-}
-
-void *arena_reacquire(struct Arena *arena, void *data, size_t sz) {
-  struct Chunk *dst_chunk = chunk_from_data(arena_acquire(arena, sz));
-  size_t dst_sz = align(sz, _Alignof(struct Chunk)) * sizeof(struct Chunk);
-
-  struct Chunk *src_chunk = chunk_from_data(data);
-  size_t min = dst_sz < src_chunk->size ? dst_sz : src_chunk->size;
-  for (size_t i = 0; i < min; ++i)
-    dst_chunk->data[i] = src_chunk->data[i];
-
-  return dst_chunk->data;
 }
 
 void arena_release(void *data) { chunk_from_data(data)->used = false; }
