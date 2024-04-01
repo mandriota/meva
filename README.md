@@ -11,6 +11,7 @@ sudo ln -n ./bin/mewa /usr/local/bin
 
 ## Featchers
 - [x] Basic arithmetic operators
+- [x] Basic logical operators 
 - [x] Operators priority and associativity
 - [x] Type inference
 - [ ] Functions
