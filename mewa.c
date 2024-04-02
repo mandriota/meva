@@ -182,6 +182,8 @@ enum TokenType {
   TT_SYM,
   TT_INT,
   TT_FLT,
+  TT_FAL,
+  TT_TRU,
 
   TT_LET,
 
@@ -195,23 +197,23 @@ enum TokenType {
   TT_EQU,
   TT_NEQ,
 
-  TT_ADD = '+',
-  TT_SUB = '-',
+  TT_ADD,
+  TT_SUB,
 
-  TT_MUL = '*',
-  TT_QUO = '/',
-  TT_MOD = '%',
+  TT_MUL,
+  TT_QUO,
+  TT_MOD,
 
-  TT_POW = '^',
+  TT_POW,
 
   TT_FAC,
 
-  TT_LP0 = '(',
-  TT_RP0 = ')',
+  TT_LP0,
+  TT_RP0,
 
-  TT_ABS = '|',
+  TT_ABS,
 
-  TT_EOX = ';',
+  TT_EOX,
 };
 
 const char *tt_stringify(enum TokenType tt) {
@@ -221,6 +223,8 @@ const char *tt_stringify(enum TokenType tt) {
     STRINGIFY_CASE(TT_SYM)
     STRINGIFY_CASE(TT_INT)
     STRINGIFY_CASE(TT_FLT)
+    STRINGIFY_CASE(TT_FAL)
+    STRINGIFY_CASE(TT_TRU)
     STRINGIFY_CASE(TT_LET)
     STRINGIFY_CASE(TT_AND)
     STRINGIFY_CASE(TT_ORR)
@@ -330,17 +334,35 @@ void lx_next_token(struct Lexer *lx) {
   lx->rd.mrk = lx->rd.ptr;
 
   switch (lx->rd.cc) {
-  case TT_ADD:
-  case TT_SUB:
-  case TT_MUL:
-  case TT_QUO:
-  case TT_MOD:
-  case TT_POW:
-  case TT_LP0:
-  case TT_RP0:
-  case TT_EOX:
-  case TT_EOS:
-    lx->tt = lx->rd.cc;
+  case '+':
+    lx->tt = TT_ADD;
+    return;
+  case '-':
+    lx->tt = TT_SUB;
+    return;
+  case '*':
+    lx->tt = TT_MUL;
+    return;
+  case '/':
+    lx->tt = TT_QUO;
+    return;
+  case '%':
+    lx->tt = TT_MOD;
+    return;
+  case '^':
+    lx->tt = TT_POW;
+    return;
+  case '(':
+    lx->tt = TT_LP0;
+    return;
+  case ')':
+    lx->tt = TT_RP0;
+    return;
+  case ';':
+    lx->tt = TT_EOX;
+    return;
+  case '\0':
+    lx->tt = TT_EOS;
     return;
   case '&':
     rd_next_char(&lx->rd);
@@ -385,6 +407,17 @@ void lx_next_token(struct Lexer *lx) {
       rd_prev(&lx->rd);
     }
     return;
+  case '\'':
+    rd_next_char(&lx->rd);
+    if (lx->rd.cc == 'f') {
+      lx->tt = TT_FAL;
+    } else if (lx->rd.cc == 't') {
+      lx->tt = TT_TRU;
+    } else {
+      lx->tt = TT_ILL;
+      rd_prev(&lx->rd);
+    }
+    return;
   }
 
   if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.') {
@@ -410,6 +443,7 @@ enum NodeType {
   NT_PRIM_SYM = TT_SYM,
   NT_PRIM_INT = TT_INT,
   NT_PRIM_FLT = TT_FLT,
+  NT_PRIM_BOL,
 
   NT_BIOP_LET = TT_LET,
 
@@ -430,16 +464,19 @@ enum NodeType {
   NT_BIOP_QUO = TT_QUO,
   NT_BIOP_MOD = TT_MOD,
 
+  NT_BIOP_POW = TT_POW,
+
   NT_BIOP_FAC = TT_FAC,
-
-  NT_UNOP_NOT,
-
-  NT_UNOP_NOP,
-  NT_UNOP_NEG,
 
   NT_UNOP_ABS = TT_ABS,
 
-  NT_BIOP_POW = TT_POW,
+  NT_UNOP_NOT,
+  NT_UNOP_NOP,
+  NT_UNOP_NEG,
+
+  NT_FUNC,
+  NT_CALL,
+  NT_CALL_ANON,
 };
 
 const char *nt_stringify(enum NodeType nt) {
@@ -447,6 +484,7 @@ const char *nt_stringify(enum NodeType nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
     STRINGIFY_CASE(NT_PRIM_INT)
     STRINGIFY_CASE(NT_PRIM_FLT)
+    STRINGIFY_CASE(NT_PRIM_BOL)    
     STRINGIFY_CASE(NT_BIOP_LET)
     STRINGIFY_CASE(NT_BIOP_AND)
     STRINGIFY_CASE(NT_BIOP_ORR)
@@ -461,12 +499,15 @@ const char *nt_stringify(enum NodeType nt) {
     STRINGIFY_CASE(NT_BIOP_MUL)
     STRINGIFY_CASE(NT_BIOP_QUO)
     STRINGIFY_CASE(NT_BIOP_MOD)
+    STRINGIFY_CASE(NT_BIOP_POW)
     STRINGIFY_CASE(NT_BIOP_FAC)
+    STRINGIFY_CASE(NT_UNOP_ABS)
     STRINGIFY_CASE(NT_UNOP_NOT)
     STRINGIFY_CASE(NT_UNOP_NOP)
     STRINGIFY_CASE(NT_UNOP_NEG)
-    STRINGIFY_CASE(NT_UNOP_ABS)
-    STRINGIFY_CASE(NT_BIOP_POW)
+    STRINGIFY_CASE(NT_FUNC)
+    STRINGIFY_CASE(NT_CALL)
+    STRINGIFY_CASE(NT_CALL_ANON)
   }
 
   return STRINGIFY(INVALID_NT);
@@ -482,6 +523,19 @@ struct BiOp {
   struct Node *l_arg, *r_arg;
 };
 
+struct Fn {
+  struct Node *spec;
+  struct Node *expr;
+};
+
+struct FnCall {
+  union {
+    unt_t *ident;
+    struct Fn *fn;
+  } func;
+  struct Node *arg;
+};
+
 struct Node {
   enum NodeType type;
 
@@ -489,6 +543,7 @@ struct Node {
     union Primitive pm;
     struct UnOp up;
     struct BiOp bp;
+    struct FnCall call;
   } as;
 };
 
@@ -520,6 +575,12 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
   case NT_PRIM_FLT:
     printf(CLR_PRIM "%Lf\n" CLR_RESET, node->as.pm.n_flt);
     return;
+  case NT_PRIM_BOL:
+	if (node->as.pm.n_bol)
+	  printf(CLR_PRIM "true\n" CLR_RESET);
+	else
+	  printf(CLR_PRIM "false\n" CLR_RESET);
+	return;
   case NT_BIOP_LET:
   case NT_BIOP_AND:
   case NT_BIOP_ORR:
@@ -540,13 +601,17 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
     nd_tree_print(node->as.bp.l_arg, depth + 1, depth_max);
     nd_tree_print(node->as.bp.r_arg, depth + 1, depth_max);
     return;
+  case NT_UNOP_ABS:
   case NT_UNOP_NOT:
   case NT_UNOP_NEG:
   case NT_UNOP_NOP:
-  case NT_UNOP_ABS:
     printf("\n");
     nd_tree_print(node->as.up.arg, depth + 1, depth_max);
     return;
+  case NT_FUNC:
+  case NT_CALL:
+  case NT_CALL_ANON:
+	FATAL("currently not implimented\n");
   }
 }
 
@@ -659,6 +724,12 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
     (*node)->as.pm.n_flt = pr->lx.pm.n_flt;
     lx_next_token(&pr->lx);
     break;
+  case TT_TRU:
+  case TT_FAL:
+	(*node)->type = NT_PRIM_BOL;
+	(*node)->as.pm.n_bol = pr->lx.tt == TT_TRU;
+    lx_next_token(&pr->lx);
+	break;
   case TT_ABS:
     if (pr->abs)
       return PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED;
@@ -818,9 +889,6 @@ enum IR_ERR ir_unop_exec_int(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_INT;
 
   switch (op) {
-  case NT_UNOP_NOT:
-    dst->as.pm.n_int = !a.n_int;
-    break;
   case NT_UNOP_NOP:
     break;
   case NT_UNOP_NEG:
@@ -856,6 +924,21 @@ enum IR_ERR ir_unop_exec_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
+enum IR_ERR ir_unop_exec_bol(struct Node *dst, enum NodeType op,
+                             union Primitive a) {
+  dst->type = NT_PRIM_BOL;
+
+  switch (op) {
+  case NT_UNOP_NOT:
+    dst->as.pm.n_bol = !a.n_bol;
+    break;
+  default:
+    return IR_ERR_ILL_NT;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
 enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
   TRY(IR_ERR, ir_exec(dst, src->as.up.arg));
   enum NodeType node_a_type = dst->type;
@@ -867,6 +950,9 @@ enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
   if (node_a_type == NT_PRIM_FLT)
     return ir_unop_exec_flt(dst, src->type, node_a_value);
 
+  if (node_a_type == NT_PRIM_BOL)
+    return ir_unop_exec_bol(dst, src->type, node_a_value);
+
   return IR_ERR_INT_OR_FLT_ARG_EXPECTED;
 }
 
@@ -875,29 +961,29 @@ enum IR_ERR ir_biop_exec_int(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_INT;
 
   switch (op) {
-  case NT_BIOP_ORR:
-    dst->as.pm.n_int = a.n_int || b.n_int;
-    break;
-  case NT_BIOP_AND:
-    dst->as.pm.n_int = a.n_int && b.n_int;
-    break;
   case NT_BIOP_GRE:
-    dst->as.pm.n_int = a.n_int > b.n_int;
+	dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_int > b.n_int;
     break;
   case NT_BIOP_LES:
-    dst->as.pm.n_int = a.n_int < b.n_int;
+	dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_int < b.n_int;
     break;
   case NT_BIOP_GEQ:
-    dst->as.pm.n_int = a.n_int >= b.n_int;
+	dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_int >= b.n_int;
     break;
   case NT_BIOP_LEQ:
-    dst->as.pm.n_int = a.n_int <= b.n_int;
+	dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_int <= b.n_int;
     break;
   case NT_BIOP_EQU:
-    dst->as.pm.n_int = a.n_int == b.n_int;
+	dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_int == b.n_int;
     break;
   case NT_BIOP_NEQ:
-    dst->as.pm.n_int = a.n_int != b.n_int;
+	dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_int != b.n_int;
     break;
   case NT_BIOP_ADD:
     dst->as.pm.n_int = a.n_int + b.n_int;
@@ -946,28 +1032,28 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
 
   switch (op) {
   case NT_BIOP_GRE:
-    dst->type = NT_PRIM_INT;
-    dst->as.pm.n_int = a.n_flt > b.n_flt;
+    dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_flt > b.n_flt;
     break;
   case NT_BIOP_LES:
-    dst->type = NT_PRIM_INT;
-    dst->as.pm.n_int = a.n_flt < b.n_flt;
+    dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_flt < b.n_flt;
     break;
   case NT_BIOP_GEQ:
-    dst->type = NT_PRIM_INT;
-    dst->as.pm.n_int = a.n_flt >= b.n_flt;
+    dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_flt >= b.n_flt;
     break;
   case NT_BIOP_LEQ:
-    dst->type = NT_PRIM_INT;
-    dst->as.pm.n_int = a.n_flt <= b.n_flt;
+    dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_flt <= b.n_flt;
     break;
   case NT_BIOP_EQU:
-    dst->type = NT_PRIM_INT;
-    dst->as.pm.n_int = a.n_flt == b.n_flt;
+    dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_flt == b.n_flt;
     break;
   case NT_BIOP_NEQ:
-    dst->type = NT_PRIM_INT;
-    dst->as.pm.n_int = a.n_flt != b.n_flt;
+    dst->type = NT_PRIM_BOL;
+    dst->as.pm.n_bol = a.n_flt != b.n_flt;
     break;
   case NT_BIOP_ADD:
     dst->as.pm.n_flt = a.n_flt + b.n_flt;
@@ -1000,6 +1086,30 @@ enum IR_ERR ir_biop_exec_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
+enum IR_ERR ir_biop_exec_bol(struct Node *dst, enum NodeType op,
+                             union Primitive a, union Primitive b) {
+  dst->type = NT_PRIM_BOL;
+
+  switch (op) {
+  case NT_BIOP_ORR:
+    dst->as.pm.n_bol = a.n_bol || b.n_bol;
+    break;
+  case NT_BIOP_AND:
+    dst->as.pm.n_bol = a.n_bol && b.n_bol;
+    break;
+  case NT_BIOP_EQU:
+    dst->as.pm.n_bol = a.n_bol == b.n_bol;
+    break;
+  case NT_BIOP_NEQ:
+    dst->as.pm.n_bol = a.n_bol != b.n_bol;
+    break;
+  default:
+	return IR_ERR_ILL_NT;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
 enum IR_ERR ir_biop_exec(struct Node *dst, struct Node *src) {
   TRY(IR_ERR, ir_exec(dst, src->as.bp.l_arg));
   enum NodeType node_a_type = dst->type;
@@ -1025,6 +1135,13 @@ enum IR_ERR ir_biop_exec(struct Node *dst, struct Node *src) {
   if (node_a_type == NT_PRIM_INT)
     TRY(IR_ERR, ir_biop_exec_int(dst, src->type, node_a_value, node_b_value));
 
+  if (node_a_type == NT_PRIM_BOL || node_b_type == NT_PRIM_BOL) {
+	if (node_a_type != NT_PRIM_BOL || node_b_type != NT_PRIM_BOL)
+	  return IR_ERR_OP_NOT_DEFINED_FOR_TYPE;
+	
+    TRY(IR_ERR, ir_biop_exec_bol(dst, src->type, node_a_value, node_b_value));
+  }
+
   return IR_ERR_NOERROR;
 }
 
@@ -1033,6 +1150,7 @@ enum IR_ERR ir_exec(struct Node *dst, struct Node *src) {
   case NT_PRIM_SYM:
   case NT_PRIM_INT:
   case NT_PRIM_FLT:
+  case NT_PRIM_BOL:
     *dst = *src;
     break;
   case NT_UNOP_NOT:
@@ -1144,13 +1262,13 @@ int main(int argc, char *argv[]) {
       .abs = false,
   };
 
-  static struct Arena principal_arena = {.head = NULL};
-
   if (isatty(STDIN_FILENO) && argc == 1)
     repl(&pr);
 
   if (argc > 2)
     FATAL("too many arguments\n");
+
+  struct Arena principal_arena = {.head = NULL};
 
   if (argc == 2) {
     pr.lx.rd.page.len = pr.lx.rd.page.cap = strlen(argv[1]);

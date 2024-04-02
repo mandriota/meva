@@ -146,6 +146,7 @@ union Primitive {
   flt_t n_flt;
   int_t n_int;
   unt_t n_unt;
+  bool n_bol;
 };
 
 int_t pow_int(int_t base, int_t expo);
