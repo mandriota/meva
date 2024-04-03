@@ -106,6 +106,7 @@ void rd_reset_counters(struct Reader *rd) {
   rd->row = rd->col = 0;
   rd->eof = rd->eos = false;
   rd->eoi = false;
+  rd->prv = false;
 }
 
 void rd_prev(struct Reader *rd) {
