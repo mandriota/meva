@@ -54,7 +54,10 @@
   }
 
 #define ERROR(...)                                                             \
-  fprintf(stderr, CLR_ERR_MSG "ERROR" CLR_RESET ": " __VA_ARGS__)
+  {                                                                            \
+    fprintf(stderr, CLR_ERR_MSG "ERROR" CLR_RESET ": " __VA_ARGS__);           \
+    fflush(stderr);                                                            \
+  }
 
 #define TRY(prefix, expr)                                                      \
   {                                                                            \

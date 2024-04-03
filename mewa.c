@@ -1262,6 +1262,7 @@ _Noreturn void repl(struct Parser *pr) {
     add_history(pr->lx.rd.page.data);
 #else
     printf(REPL_PROMPT);
+	fflush(stdout);
 
     ssize_t line_len =
         getline(&pr->lx.rd.page.data, &pr->lx.rd.page.cap, stdin);
@@ -1363,10 +1364,9 @@ int main(int argc, char *argv[]) {
                 RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
   printf(PIPE_RESULT_SUFFIX);
-  fclose(pr.lx.rd.src);
 
   arena_dealloc(&default_arena);
   arena_dealloc(&principal_arena);
-
+  
   return EXIT_SUCCESS;
 }
