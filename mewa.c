@@ -368,6 +368,7 @@ void lx_next_token_factorial(struct Lexer *lx) {
     rd_next_char(&lx->rd);                                                     \
     consumer;                                                                  \
     rd_prev(&lx->rd);                                                          \
+    lx->tt = failure_token_type;                                               \
     break;                                                                     \
   }
 
@@ -931,6 +932,24 @@ enum IR_ERR ir_unop_exec_n_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
+enum IR_ERR ir_unop_exec_n_cmx(struct Node *dst, enum NodeType op,
+                               union Primitive a) {
+  dst->type = NT_PRIM_CMX;
+
+  switch (op) {
+    EXEC_CASE(NT_UNOP_NOP, )
+    EXEC_CASE(NT_UNOP_NEG, dst->as.pm.n_cmx = -a.n_cmx)
+  case NT_UNOP_ABS:
+    dst->type = NT_PRIM_FLT;
+    dst->as.pm.n_flt = cabs(a.n_cmx);
+    break;
+  default:
+    return IR_ERR_ILL_NT;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
 enum IR_ERR ir_unop_exec_n_bol(struct Node *dst, enum NodeType op,
                                union Primitive a) {
   dst->type = NT_PRIM_BOL;
@@ -949,14 +968,17 @@ enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
   enum NodeType node_a_type = dst->type;
   union Primitive node_a_value = dst->as.pm;
 
+  if (node_a_type == NT_PRIM_BOL)
+    return ir_unop_exec_n_bol(dst, src->type, node_a_value);
+
   if (node_a_type == NT_PRIM_INT)
     return ir_unop_exec_n_int(dst, src->type, node_a_value);
 
   if (node_a_type == NT_PRIM_FLT)
     return ir_unop_exec_n_flt(dst, src->type, node_a_value);
 
-  if (node_a_type == NT_PRIM_BOL)
-    return ir_unop_exec_n_bol(dst, src->type, node_a_value);
+  if (node_a_type == NT_PRIM_CMX)
+    return ir_unop_exec_n_cmx(dst, src->type, node_a_value);
 
   return IR_ERR_NUM_ARG_EXPECTED;
 }
