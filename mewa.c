@@ -42,6 +42,7 @@
 
 #include "util.h"
 
+#include <complex.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
 #include <stdio.h>
@@ -183,6 +184,7 @@ enum TokenType {
   TT_SYM,
   TT_INT,
   TT_FLT,
+  TT_CMX,
   TT_FAL,
   TT_TRU,
 
@@ -225,6 +227,7 @@ const char *tt_stringify(enum TokenType tt) {
     STRINGIFY_CASE(TT_SYM)
     STRINGIFY_CASE(TT_INT)
     STRINGIFY_CASE(TT_FLT)
+    STRINGIFY_CASE(TT_CMX)
     STRINGIFY_CASE(TT_FAL)
     STRINGIFY_CASE(TT_TRU)
     STRINGIFY_CASE(TT_LET)
@@ -286,20 +289,36 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
 }
 
 void lx_next_token_number(struct Lexer *lx) {
-  lx->tt = TT_FLT;
+  lx->tt = TT_ILL;
 
-  int_t mnt, exp;
+  int_t decimal_log10, mnt, exp;
   lx_read_integer(lx, &mnt, &exp);
 
   if (lx->rd.cc == '.') {
+    lx->tt = TT_FLT;
     rd_next_char(&lx->rd);
 
     lx->pm.n_flt = (flt_t)mnt * pow(10, (flt_t)exp);
-    int_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
+    decimal_log10 = lx_read_integer(lx, &mnt, &exp);
     lx->pm.n_flt += (flt_t)mnt / decimal_log10;
-  } else if (exp == 0) {
+  } else if (exp != 0) {
+    lx->tt = TT_FLT;
+    lx->pm.n_flt = (flt_t)mnt * pow(10, (flt_t)exp);
+  } else if (lx->rd.cc != 'i' || mnt != 0) {
     lx->tt = TT_INT;
     lx->pm.n_int = mnt;
+  }
+
+  if (lx->rd.cc == 'i') {
+    if (lx->tt == TT_ILL) {
+      lx->pm.n_cmx = I;
+    } else if (lx->tt == TT_FLT) {
+      lx->pm.n_cmx = lx->pm.n_flt * I;
+    } else if (lx->tt == TT_INT)
+      lx->pm.n_cmx = lx->pm.n_int * I;
+
+    lx->tt = TT_CMX;
+    return;
   }
 
   rd_prev(&lx->rd);
@@ -379,7 +398,7 @@ void lx_next_token(struct Lexer *lx) {
     EXEC_CASE('\'', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('f', TT_FAL)
                                                        LX_TRY_C('t', TT_TRU)))
   default:
-    if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.') {
+    if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.' || lx->rd.cc == 'i') {
       lx_next_token_number(lx);
     } else if (IS_LETTER(lx->rd.cc))
       lx_next_token_symbol(lx);
@@ -399,6 +418,7 @@ enum NodeType {
   NT_PRIM_SYM = TT_SYM,
   NT_PRIM_INT = TT_INT,
   NT_PRIM_FLT = TT_FLT,
+  NT_PRIM_CMX = TT_CMX,
   NT_PRIM_BOL,
 
   NT_BIOP_LET = TT_LET,
@@ -440,6 +460,7 @@ const char *nt_stringify(enum NodeType nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
     STRINGIFY_CASE(NT_PRIM_INT)
     STRINGIFY_CASE(NT_PRIM_FLT)
+    STRINGIFY_CASE(NT_PRIM_CMX)
     STRINGIFY_CASE(NT_PRIM_BOL)
     STRINGIFY_CASE(NT_BIOP_LET)
     STRINGIFY_CASE(NT_BIOP_AND)
@@ -530,6 +551,19 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
     return;
   case NT_PRIM_FLT:
     printf(CLR_PRIM "%Lf\n" CLR_RESET, node->as.pm.n_flt);
+    return;
+  case NT_PRIM_CMX:
+    printf(CLR_PRIM "");
+    if (creal(node->as.pm.n_cmx) != 0 && cimag(node->as.pm.n_cmx) != 0) {
+      printf(CLR_PRIM "%Lf %Lfi\n" CLR_RESET, creal(node->as.pm.n_cmx),
+             cimag(node->as.pm.n_cmx));
+    } else if (creal(node->as.pm.n_cmx) == 0 && cimag(node->as.pm.n_cmx) == 0) {
+      printf(CLR_PRIM "0\n" CLR_RESET);
+    } else if (creal(node->as.pm.n_cmx) != 0) {
+      printf(CLR_PRIM "%Lf\n" CLR_RESET, creal(node->as.pm.n_cmx));
+    } else if (cimag(node->as.pm.n_cmx) != 0)
+      printf(CLR_PRIM "%Lfi\n" CLR_RESET, cimag(node->as.pm.n_cmx));
+
     return;
   case NT_PRIM_BOL:
     if (node->as.pm.n_bol)
@@ -677,6 +711,11 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
   case TT_FLT:
     (*node)->type = NT_PRIM_FLT;
     (*node)->as.pm.n_flt = pr->lx.pm.n_flt;
+    lx_next_token(&pr->lx);
+    break;
+  case TT_CMX:
+    (*node)->type = NT_PRIM_CMX;
+    (*node)->as.pm.n_cmx = pr->lx.pm.n_cmx;
     lx_next_token(&pr->lx);
     break;
   case TT_TRU:
@@ -1005,6 +1044,31 @@ enum IR_ERR ir_biop_exec_n_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
+enum IR_ERR ir_biop_exec_n_cmx(struct Node *dst, enum NodeType op,
+                               union Primitive a, union Primitive b) {
+  dst->type = NT_PRIM_CMX;
+
+  switch (op) {
+    EXEC_CASE(NT_BIOP_ADD, dst->as.pm.n_cmx = a.n_cmx + b.n_cmx)
+    EXEC_CASE(NT_BIOP_SUB, dst->as.pm.n_cmx = a.n_cmx - b.n_cmx)
+    EXEC_CASE(NT_BIOP_MUL, dst->as.pm.n_cmx = a.n_cmx * b.n_cmx)
+    EXEC_CASE(NT_BIOP_POW, dst->as.pm.n_cmx = pow(a.n_cmx, b.n_cmx))
+  case NT_BIOP_MOD:
+  case NT_BIOP_FAC:
+    return IR_ERR_NOT_DEFINED_FOR_TYPE;
+  case NT_BIOP_QUO:
+    if (b.n_cmx == 0)
+      return IR_ERR_DIV_BY_ZERO;
+
+    dst->as.pm.n_cmx = a.n_cmx / b.n_cmx;
+    break;
+  default:
+    return ir_biop_exec_cmp_n_flt(dst, op, a, b);
+  }
+
+  return IR_ERR_NOERROR;
+}
+
 enum IR_ERR ir_biop_exec_n_bol(struct Node *dst, enum NodeType op,
                                union Primitive a, union Primitive b) {
   dst->type = NT_PRIM_BOL;
@@ -1014,12 +1078,23 @@ enum IR_ERR ir_biop_exec_n_bol(struct Node *dst, enum NodeType op,
     EXEC_CASE(NT_BIOP_AND, dst->as.pm.n_bol = a.n_bol && b.n_bol)
     EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = a.n_bol == b.n_bol)
     EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = a.n_bol != b.n_bol)
+  case NT_BIOP_GRE:
+  case NT_BIOP_LES:
+  case NT_BIOP_GEQ:
+  case NT_BIOP_LEQ:
+    return IR_ERR_NOT_DEFINED_FOR_TYPE;
   default:
     return IR_ERR_ILL_NT;
   }
 
   return IR_ERR_NOERROR;
 }
+
+#define IR_PM_CONVERT(name, from, to, to_type)                                 \
+  {                                                                            \
+    node_##name##_type = to_type;                                              \
+    node_##name##_value.to = node_##name##_value.from;                         \
+  }
 
 enum IR_ERR ir_biop_exec(struct Node *dst, struct Node *src) {
   TRY(IR_ERR, ir_exec(dst, src->as.bp.l_arg));
@@ -1030,15 +1105,21 @@ enum IR_ERR ir_biop_exec(struct Node *dst, struct Node *src) {
   enum NodeType node_b_type = dst->type;
   union Primitive node_b_value = dst->as.pm;
 
-  if (node_a_type == NT_PRIM_FLT && node_b_type == NT_PRIM_INT) {
-    node_b_type = NT_PRIM_FLT;
-    node_b_value.n_flt = node_b_value.n_int;
-  }
+  if (node_a_type == NT_PRIM_FLT && node_b_type == NT_PRIM_INT)
+    IR_PM_CONVERT(b, n_int, n_flt, NT_PRIM_FLT)
+  else if (node_a_type == NT_PRIM_INT && node_b_type == NT_PRIM_FLT)
+    IR_PM_CONVERT(a, n_int, n_flt, NT_PRIM_FLT)
+  else if (node_a_type == NT_PRIM_CMX && node_b_type == NT_PRIM_INT)
+    IR_PM_CONVERT(b, n_int, n_cmx, NT_PRIM_CMX)
+  else if (node_a_type == NT_PRIM_INT && node_b_type == NT_PRIM_CMX)
+    IR_PM_CONVERT(a, n_int, n_cmx, NT_PRIM_CMX)
+  else if (node_a_type == NT_PRIM_CMX && node_b_type == NT_PRIM_FLT)
+    IR_PM_CONVERT(b, n_flt, n_cmx, NT_PRIM_CMX)
+  else if (node_a_type == NT_PRIM_FLT && node_b_type == NT_PRIM_CMX)
+    IR_PM_CONVERT(a, n_flt, n_cmx, NT_PRIM_CMX)
 
-  if (node_a_type == NT_PRIM_INT && node_b_type == NT_PRIM_FLT) {
-    node_a_type = NT_PRIM_FLT;
-    node_a_value.n_flt = node_a_value.n_int;
-  }
+  if (node_a_type == NT_PRIM_CMX)
+    TRY(IR_ERR, ir_biop_exec_n_cmx(dst, src->type, node_a_value, node_b_value));
 
   if (node_a_type == NT_PRIM_FLT)
     TRY(IR_ERR, ir_biop_exec_n_flt(dst, src->type, node_a_value, node_b_value));
@@ -1061,6 +1142,7 @@ enum IR_ERR ir_exec(struct Node *dst, struct Node *src) {
   case NT_PRIM_SYM:
   case NT_PRIM_INT:
   case NT_PRIM_FLT:
+  case NT_PRIM_CMX:
   case NT_PRIM_BOL:
     *dst = *src;
     return IR_ERR_NOERROR;
