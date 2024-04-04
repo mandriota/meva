@@ -42,12 +42,12 @@
 
 #include "util.h"
 
-#include <math.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tgmath.h>
 
 #ifdef HAVE_LIBREADLINE
 #include <readline/history.h> // IWYU pragma: keep
@@ -291,10 +291,10 @@ void lx_next_token_number(struct Lexer *lx) {
   int_t mnt, exp;
   lx_read_integer(lx, &mnt, &exp);
 
-  lx->pm.n_flt = (flt_t)mnt * powl(10, exp);
-
   if (lx->rd.cc == '.') {
     rd_next_char(&lx->rd);
+
+    lx->pm.n_flt = (flt_t)mnt * pow(10, (flt_t)exp);
     int_t decimal_log10 = lx_read_integer(lx, &mnt, &exp);
     lx->pm.n_flt += (flt_t)mnt / decimal_log10;
   } else if (exp == 0) {
@@ -884,7 +884,7 @@ enum IR_ERR ir_unop_exec_n_flt(struct Node *dst, enum NodeType op,
   switch (op) {
     EXEC_CASE(NT_UNOP_NOP, )
     EXEC_CASE(NT_UNOP_NEG, dst->as.pm.n_flt = -a.n_flt)
-    EXEC_CASE(NT_UNOP_ABS, dst->as.pm.n_flt = fabsl(a.n_flt))
+    EXEC_CASE(NT_UNOP_ABS, dst->as.pm.n_flt = fabs(a.n_flt))
   default:
     return IR_ERR_ILL_NT;
   }
@@ -967,7 +967,7 @@ enum IR_ERR ir_biop_exec_n_int(struct Node *dst, enum NodeType op,
   case NT_BIOP_POW:
     if (b.n_int < 0) {
       dst->type = NT_PRIM_FLT;
-      dst->as.pm.n_flt = powl((flt_t)a.n_int, (flt_t)b.n_int);
+      dst->as.pm.n_flt = pow((flt_t)a.n_int, (flt_t)b.n_int);
     } else
       dst->as.pm.n_int = pow_int(a.n_int, b.n_int);
 
@@ -989,8 +989,8 @@ enum IR_ERR ir_biop_exec_n_flt(struct Node *dst, enum NodeType op,
     EXEC_CASE(NT_BIOP_ADD, dst->as.pm.n_flt = a.n_flt + b.n_flt)
     EXEC_CASE(NT_BIOP_SUB, dst->as.pm.n_flt = a.n_flt - b.n_flt)
     EXEC_CASE(NT_BIOP_MUL, dst->as.pm.n_flt = a.n_flt * b.n_flt)
-    EXEC_CASE(NT_BIOP_MOD, dst->as.pm.n_flt = fmodl(a.n_flt, b.n_flt))
-    EXEC_CASE(NT_BIOP_POW, dst->as.pm.n_flt = powl(a.n_flt, b.n_flt))
+    EXEC_CASE(NT_BIOP_MOD, dst->as.pm.n_flt = fmod(a.n_flt, b.n_flt))
+    EXEC_CASE(NT_BIOP_POW, dst->as.pm.n_flt = pow(a.n_flt, b.n_flt))
     EXEC_CASE(NT_BIOP_FAC, dst->as.pm.n_flt = fac_flt(a.n_flt, b.n_flt))
   case NT_BIOP_QUO:
     if (b.n_flt == 0)

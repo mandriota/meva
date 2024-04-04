@@ -24,9 +24,12 @@
 #include "config.h"
 
 #include <limits.h>
-#include <math.h>
+#include <tgmath.h> // IWYU pragma: keep
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h> // IWYU pragma: keep
+#include <complex.h>
+// IWYU pragma: no_include <math.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846264338327950288
@@ -151,6 +154,7 @@ char *decode_symbol(char *dst, char *dst_end, unt_t src);
 char *int_stringify(char *dst, char *dst_end, int_t num);
 
 union Primitive {
+  long double complex n_cmx;
   flt_t n_flt;
   int_t n_int;
   unt_t n_unt;

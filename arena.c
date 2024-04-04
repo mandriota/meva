@@ -23,7 +23,6 @@
 #include "util.h"
 
 #include <assert.h>
-#include <stdbool.h> // IWYU pragma: keep
 
 struct Chunk {
   struct Chunk *next;

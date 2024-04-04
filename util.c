@@ -21,7 +21,7 @@
 #include "util.h"
 
 #include <assert.h>
-#include <math.h>
+#include <tgmath.h>
 
 //=:util
 //           _   _ _
@@ -145,16 +145,16 @@ flt_t fac_flt_helper(flt_t i, flt_t step) {
   flt_t rt = 0;
 
   for (int_t j = 1; j <= step; ++j)
-    rt += cosl(acosl(cosl(2 * j * M_PI / step)) * i);
+    rt += cos(acos(cos(2 * j * M_PI / step)) * i);
 
   return rt / step;
 }
 
 flt_t fac_flt(flt_t base, flt_t step) {
-  flt_t rt = powl(step, base / step) * tgammal(1 + base / step);
+  flt_t rt = pow(step, base / step) * tgamma(1 + base / step);
 
   for (int_t i = 1; i < step; ++i)
-    rt *= powl(powl(step, (step - i) / step) / tgammal(i / step),
+    rt *= pow(pow(step, (step - i) / step) / tgamma(i / step),
                fac_flt_helper(base - i, step));
 
   return rt;
