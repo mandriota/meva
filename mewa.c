@@ -1044,11 +1044,17 @@ enum IR_ERR ir_biop_exec_cmp_n_flt(struct Node *dst, enum NodeType op,
   switch (op) {
     EXEC_CASE(NT_BIOP_GRE, dst->as.pm.n_bol = a.n_flt > b.n_flt)
     EXEC_CASE(NT_BIOP_LES, dst->as.pm.n_bol = a.n_flt < b.n_flt)
-    EXEC_CASE(NT_BIOP_GEQ, dst->as.pm.n_bol = a.n_flt >= b.n_flt)
-    EXEC_CASE(NT_BIOP_LEQ, dst->as.pm.n_bol = a.n_flt <= b.n_flt)
-    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = N_FLT_IS_EPSILON_EQUAL(
+    EXEC_CASE(NT_BIOP_GEQ,
+              dst->as.pm.n_bol =
+                  IS_EPSILON_EQUAL_FLT(a.n_flt, b.n_flt, FLT_PRECISION) ||
+                  a.n_flt > b.n_flt)
+    EXEC_CASE(NT_BIOP_LEQ,
+              dst->as.pm.n_bol =
+                  IS_EPSILON_EQUAL_FLT(a.n_flt, b.n_flt, FLT_PRECISION) ||
+                  a.n_flt < b.n_flt)
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = IS_EPSILON_EQUAL_FLT(
                                a.n_flt, b.n_flt, FLT_PRECISION))
-    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !N_FLT_IS_EPSILON_EQUAL(
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !IS_EPSILON_EQUAL_FLT(
                                a.n_flt, b.n_flt, FLT_PRECISION))
   default:
     return IR_ERR_ILL_NT;
@@ -1086,9 +1092,9 @@ enum IR_ERR ir_biop_exec_cmp_n_cmx(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = N_CMX_IS_EPSILON_EQUAL(
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = IS_EPSILON_EQUAL_CMX(
                                a.n_cmx, b.n_cmx, FLT_PRECISION))
-    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !N_CMX_IS_EPSILON_EQUAL(
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !IS_EPSILON_EQUAL_CMX(
                                a.n_cmx, b.n_cmx, FLT_PRECISION))
   default:
     return IR_ERR_ILL_NT;

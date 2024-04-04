@@ -23,12 +23,12 @@
 
 #include "config.h"
 
+#include <complex.h>
 #include <limits.h>
-#include <tgmath.h> // IWYU pragma: keep
+#include <stdbool.h> // IWYU pragma: keep
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h> // IWYU pragma: keep
-#include <complex.h>
+#include <tgmath.h> // IWYU pragma: keep
 // IWYU pragma: no_include <math.h>
 
 #ifndef M_PI
@@ -169,8 +169,8 @@ flt_t fac_flt(flt_t z, flt_t a);
 
 #define MAX(a, b) (a >= b ? a : b)
 
-#define N_FLT_IS_EPSILON_EQUAL(a, b, delta) (fabs(a - b) <= delta * MAX(a, b))
+#define IS_EPSILON_EQUAL_FLT(a, b, delta) (fabs(a - b) <= delta * MAX(a, b))
 
-#define N_CMX_IS_EPSILON_EQUAL(a, b, delta)                                    \
-  N_FLT_IS_EPSILON_EQUAL(creal(a), creal(b), delta) &&                         \
-      N_FLT_IS_EPSILON_EQUAL(cimag(a), cimag(b), delta)
+#define IS_EPSILON_EQUAL_CMX(a, b, delta)                                      \
+  IS_EPSILON_EQUAL_FLT(creal(a), creal(b), delta) &&                           \
+      IS_EPSILON_EQUAL_FLT(cimag(a), cimag(b), delta)
