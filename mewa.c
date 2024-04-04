@@ -336,116 +336,54 @@ void lx_next_token_factorial(struct Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
+#define LX_TRY_C(c, token_type)                                                \
+  {                                                                            \
+    if (lx->rd.cc == c) {                                                      \
+      lx->tt = token_type;                                                     \
+      return;                                                                  \
+    }                                                                          \
+  }
+
+#define LX_CONSUME_C_OR_RET_TT(failure_token_type, consumer)                   \
+  {                                                                            \
+    rd_next_char(&lx->rd);                                                     \
+    consumer;                                                                  \
+    rd_prev(&lx->rd);                                                          \
+    break;                                                                     \
+  }
+
 void lx_next_token(struct Lexer *lx) {
   rd_next_char(&lx->rd);
   rd_skip_whitespaces(&lx->rd);
 
   lx->rd.mrk = lx->rd.ptr;
+  lx->tt = TT_ILL;
 
   switch (lx->rd.cc) {
-  case '+':
-    lx->tt = TT_ADD;
-    return;
-  case '-':
-    lx->tt = TT_SUB;
-    return;
-  case '*':
-    lx->tt = TT_MUL;
-    return;
-  case '/':
-    lx->tt = TT_QUO;
-    return;
-  case '%':
-    lx->tt = TT_MOD;
-    return;
-  case '^':
-    lx->tt = TT_POW;
-    return;
-  case '(':
-    lx->tt = TT_LP0;
-    return;
-  case ')':
-    lx->tt = TT_RP0;
-    return;
-  case ';':
-    lx->tt = TT_EOX;
-    return;
-  case '\0':
-    lx->tt = TT_EOS;
-    return;
-  case '&':
-    rd_next_char(&lx->rd);
-    if (lx->rd.cc == '&') {
-      lx->tt = TT_AND;
-      return;
-    }
-    rd_prev(&lx->rd);
-
-    break;
-  case '|':
-    rd_next_char(&lx->rd);
-    if (lx->rd.cc == '|') {
-      lx->tt = TT_ORR;
-      return;
-    }
-    rd_prev(&lx->rd);
-
-    lx->tt = TT_ABS;
-    return;
-  case '>':
-    rd_next_char(&lx->rd);
-    if (lx->rd.cc == '=') {
-      lx->tt = TT_GEQ;
-      return;
-    }
-    rd_prev(&lx->rd);
-
-    lx->tt = TT_GRE;
-    return;
-  case '<':
-    rd_next_char(&lx->rd);
-    if (lx->rd.cc == '=') {
-      lx->tt = TT_LEQ;
-      return;
-    }
-    rd_prev(&lx->rd);
-
-    lx->tt = TT_LES;
-    return;
-  case '=':
-    rd_next_char(&lx->rd);
-    if (lx->rd.cc == '=') {
-      lx->tt = TT_EQU;
-      return;
-    }
-    rd_prev(&lx->rd);
-
-    lx->tt = TT_LET;
-    return;
-  case '\'':
-    rd_next_char(&lx->rd);
-    if (lx->rd.cc == 'f') {
-      lx->tt = TT_FAL;
-      return;
-    }
-    if (lx->rd.cc == 't') {
-      lx->tt = TT_TRU;
-      return;
-    }
-    rd_prev(&lx->rd);
-
-    lx->tt = TT_ILL;
-    return;
+    EXEC_CASE('+', lx->tt = TT_ADD)
+    EXEC_CASE('-', lx->tt = TT_SUB)
+    EXEC_CASE('*', lx->tt = TT_MUL)
+    EXEC_CASE('/', lx->tt = TT_QUO)
+    EXEC_CASE('%', lx->tt = TT_MOD)
+    EXEC_CASE('^', lx->tt = TT_POW)
+    EXEC_CASE('(', lx->tt = TT_LP0)
+    EXEC_CASE(')', lx->tt = TT_RP0)
+    EXEC_CASE(';', lx->tt = TT_EOX)
+    EXEC_CASE('\0', lx->tt = TT_EOS)
+    EXEC_CASE('!', lx_next_token_factorial(lx))
+    EXEC_CASE('&', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('&', TT_AND)))
+    EXEC_CASE('|', LX_CONSUME_C_OR_RET_TT(TT_ABS, LX_TRY_C('|', TT_ORR)))
+    EXEC_CASE('>', LX_CONSUME_C_OR_RET_TT(TT_GRE, LX_TRY_C('=', TT_GEQ)))
+    EXEC_CASE('<', LX_CONSUME_C_OR_RET_TT(TT_LES, LX_TRY_C('=', TT_LEQ)))
+    EXEC_CASE('=', LX_CONSUME_C_OR_RET_TT(TT_LET, LX_TRY_C('=', TT_EQU)))
+    EXEC_CASE('\'', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('f', TT_FAL)
+                                                       LX_TRY_C('t', TT_TRU)))
+  default:
+    if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.') {
+      lx_next_token_number(lx);
+    } else if (IS_LETTER(lx->rd.cc))
+      lx_next_token_symbol(lx);
   }
-
-  if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.') {
-    lx_next_token_number(lx);
-  } else if (IS_LETTER(lx->rd.cc)) {
-    lx_next_token_symbol(lx);
-  } else if (lx->rd.cc == '!') {
-    lx_next_token_factorial(lx);
-  } else
-    lx->tt = TT_ILL;
 }
 
 //=:parser
