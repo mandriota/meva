@@ -88,6 +88,11 @@
   case name:                                                                   \
     return STRINGIFY(name);
 
+#define EXEC_CASE(value, expr)                                                 \
+  case value:                                                                  \
+    expr;                                                                      \
+    break;
+
 //=:util:ascii
 #define IS_WHITESPACE(c)                                                       \
   (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')

@@ -922,11 +922,6 @@ const char *ir_err_stringify(enum IR_ERR ir_err) {
   return STRINGIFY(INVALID_IR_ERR);
 }
 
-#define EXEC_CASE(op_name, expr)                                               \
-  case op_name:                                                                \
-    expr;                                                                      \
-    break;
-
 enum IR_ERR ir_exec(struct Node *dst, struct Node *src);
 
 enum IR_ERR ir_unop_exec_n_int(struct Node *dst, enum NodeType op,
@@ -1077,10 +1072,10 @@ enum IR_ERR ir_biop_exec_n_bol(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
-	EXEC_CASE(NT_BIOP_ORR, dst->as.pm.n_bol = a.n_bol || b.n_bol)
-	EXEC_CASE(NT_BIOP_AND, dst->as.pm.n_bol = a.n_bol && b.n_bol)
-	EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = a.n_bol == b.n_bol)
-	EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = a.n_bol != b.n_bol)
+    EXEC_CASE(NT_BIOP_ORR, dst->as.pm.n_bol = a.n_bol || b.n_bol)
+    EXEC_CASE(NT_BIOP_AND, dst->as.pm.n_bol = a.n_bol && b.n_bol)
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = a.n_bol == b.n_bol)
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = a.n_bol != b.n_bol)
   default:
     return IR_ERR_ILL_NT;
   }
