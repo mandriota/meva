@@ -166,3 +166,11 @@ int_t pow_int(int_t base, int_t expo);
 int_t fac_int(int_t base, int_t step);
 
 flt_t fac_flt(flt_t z, flt_t a);
+
+#define MAX(a, b) (a >= b ? a : b)
+
+#define N_FLT_IS_EPSILON_EQUAL(a, b, delta) (fabs(a - b) <= delta * MAX(a, b))
+
+#define N_CMX_IS_EPSILON_EQUAL(a, b, delta)                                    \
+  N_FLT_IS_EPSILON_EQUAL(creal(a), creal(b), delta) &&                         \
+      N_FLT_IS_EPSILON_EQUAL(cimag(a), cimag(b), delta)

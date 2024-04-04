@@ -94,6 +94,9 @@
 
 #define REPL_RESULT_SUFFIX "\n"
 
+//=:config:math
+#define FLT_PRECISION 0.000001
+
 //=:config:internal
 // must be at least 1
 #define INTERNAL_READING_BUF_SIZE 512

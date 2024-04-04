@@ -961,26 +961,23 @@ enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
   return IR_ERR_NUM_ARG_EXPECTED;
 }
 
-#define IR_BIOP_EXEC_CMP(T)                                                    \
-  enum IR_ERR ir_biop_exec_cmp_##T(struct Node *dst, enum NodeType op,         \
-                                   union Primitive a, union Primitive b) {     \
-    dst->type = NT_PRIM_BOL;                                                   \
-                                                                               \
-    switch (op) {                                                              \
-      EXEC_CASE(NT_BIOP_GRE, dst->as.pm.n_bol = a.T > b.T)                     \
-      EXEC_CASE(NT_BIOP_LES, dst->as.pm.n_bol = a.T < b.T)                     \
-      EXEC_CASE(NT_BIOP_GEQ, dst->as.pm.n_bol = a.T >= b.T)                    \
-      EXEC_CASE(NT_BIOP_LEQ, dst->as.pm.n_bol = a.T <= b.T)                    \
-      EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = a.T == b.T)                    \
-      EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = a.T != b.T)                    \
-    default:                                                                   \
-      return IR_ERR_ILL_NT;                                                    \
-    }                                                                          \
-                                                                               \
-    return IR_ERR_NOERROR;                                                     \
+enum IR_ERR ir_biop_exec_cmp_n_int(struct Node *dst, enum NodeType op,
+                                   union Primitive a, union Primitive b) {
+  dst->type = NT_PRIM_BOL;
+
+  switch (op) {
+    EXEC_CASE(NT_BIOP_GRE, dst->as.pm.n_bol = a.n_int > b.n_int)
+    EXEC_CASE(NT_BIOP_LES, dst->as.pm.n_bol = a.n_int < b.n_int)
+    EXEC_CASE(NT_BIOP_GEQ, dst->as.pm.n_bol = a.n_int >= b.n_int)
+    EXEC_CASE(NT_BIOP_LEQ, dst->as.pm.n_bol = a.n_int <= b.n_int)
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = a.n_int == b.n_int)
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = a.n_int != b.n_int)
+  default:
+    return IR_ERR_ILL_NT;
   }
 
-IR_BIOP_EXEC_CMP(n_int)
+  return IR_ERR_NOERROR;
+}
 
 enum IR_ERR ir_biop_exec_n_int(struct Node *dst, enum NodeType op,
                                union Primitive a, union Primitive b) {
@@ -1018,7 +1015,25 @@ enum IR_ERR ir_biop_exec_n_int(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-IR_BIOP_EXEC_CMP(n_flt)
+enum IR_ERR ir_biop_exec_cmp_n_flt(struct Node *dst, enum NodeType op,
+                                   union Primitive a, union Primitive b) {
+  dst->type = NT_PRIM_BOL;
+
+  switch (op) {
+    EXEC_CASE(NT_BIOP_GRE, dst->as.pm.n_bol = a.n_flt > b.n_flt)
+    EXEC_CASE(NT_BIOP_LES, dst->as.pm.n_bol = a.n_flt < b.n_flt)
+    EXEC_CASE(NT_BIOP_GEQ, dst->as.pm.n_bol = a.n_flt >= b.n_flt)
+    EXEC_CASE(NT_BIOP_LEQ, dst->as.pm.n_bol = a.n_flt <= b.n_flt)
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = N_FLT_IS_EPSILON_EQUAL(
+                               a.n_flt, b.n_flt, FLT_PRECISION))
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !N_FLT_IS_EPSILON_EQUAL(
+                               a.n_flt, b.n_flt, FLT_PRECISION))
+  default:
+    return IR_ERR_ILL_NT;
+  }
+
+  return IR_ERR_NOERROR;
+}
 
 enum IR_ERR ir_biop_exec_n_flt(struct Node *dst, enum NodeType op,
                                union Primitive a, union Primitive b) {
@@ -1044,6 +1059,22 @@ enum IR_ERR ir_biop_exec_n_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
+enum IR_ERR ir_biop_exec_cmp_n_cmx(struct Node *dst, enum NodeType op,
+                                   union Primitive a, union Primitive b) {
+  dst->type = NT_PRIM_BOL;
+
+  switch (op) {
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = N_CMX_IS_EPSILON_EQUAL(
+                               a.n_cmx, b.n_cmx, FLT_PRECISION))
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !N_CMX_IS_EPSILON_EQUAL(
+                               a.n_cmx, b.n_cmx, FLT_PRECISION))
+  default:
+    return IR_ERR_ILL_NT;
+  }
+
+  return IR_ERR_NOERROR;
+}
+
 enum IR_ERR ir_biop_exec_n_cmx(struct Node *dst, enum NodeType op,
                                union Primitive a, union Primitive b) {
   dst->type = NT_PRIM_CMX;
@@ -1063,7 +1094,7 @@ enum IR_ERR ir_biop_exec_n_cmx(struct Node *dst, enum NodeType op,
     dst->as.pm.n_cmx = a.n_cmx / b.n_cmx;
     break;
   default:
-    return ir_biop_exec_cmp_n_flt(dst, op, a, b);
+    return ir_biop_exec_cmp_n_cmx(dst, op, a, b);
   }
 
   return IR_ERR_NOERROR;
