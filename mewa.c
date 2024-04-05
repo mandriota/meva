@@ -968,19 +968,18 @@ enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
   enum NodeType node_a_type = dst->type;
   union Primitive node_a_value = dst->as.pm;
 
-  if (node_a_type == NT_PRIM_BOL)
+  switch (node_a_type) {
+  case NT_PRIM_BOL:
     return ir_unop_exec_n_bol(dst, src->type, node_a_value);
-
-  if (node_a_type == NT_PRIM_INT)
+  case NT_PRIM_INT:
     return ir_unop_exec_n_int(dst, src->type, node_a_value);
-
-  if (node_a_type == NT_PRIM_FLT)
+  case NT_PRIM_FLT:
     return ir_unop_exec_n_flt(dst, src->type, node_a_value);
-
-  if (node_a_type == NT_PRIM_CMX)
+  case NT_PRIM_CMX:
     return ir_unop_exec_n_cmx(dst, src->type, node_a_value);
-
-  return IR_ERR_NUM_ARG_EXPECTED;
+  default:
+    return IR_ERR_NUM_ARG_EXPECTED;
+  }
 }
 
 enum IR_ERR ir_biop_exec_cmp_n_int(struct Node *dst, enum NodeType op,
@@ -1046,16 +1045,16 @@ enum IR_ERR ir_biop_exec_cmp_n_flt(struct Node *dst, enum NodeType op,
     EXEC_CASE(NT_BIOP_LES, dst->as.pm.n_bol = a.n_flt < b.n_flt)
     EXEC_CASE(NT_BIOP_GEQ,
               dst->as.pm.n_bol =
-                  IS_EPSILON_EQUAL_FLT(a.n_flt, b.n_flt, FLT_PRECISION) ||
+                  is_almost_equal_flt(a.n_flt, b.n_flt, MAX_ULPS_DIFF) ||
                   a.n_flt > b.n_flt)
     EXEC_CASE(NT_BIOP_LEQ,
               dst->as.pm.n_bol =
-                  IS_EPSILON_EQUAL_FLT(a.n_flt, b.n_flt, FLT_PRECISION) ||
+                  is_almost_equal_flt(a.n_flt, b.n_flt, MAX_ULPS_DIFF) ||
                   a.n_flt < b.n_flt)
-    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = IS_EPSILON_EQUAL_FLT(
-                               a.n_flt, b.n_flt, FLT_PRECISION))
-    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !IS_EPSILON_EQUAL_FLT(
-                               a.n_flt, b.n_flt, FLT_PRECISION))
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = is_almost_equal_flt(
+                               a.n_flt, b.n_flt, MAX_ULPS_DIFF))
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !is_almost_equal_flt(
+                               a.n_flt, b.n_flt, MAX_ULPS_DIFF))
   default:
     return IR_ERR_ILL_NT;
   }
@@ -1092,10 +1091,10 @@ enum IR_ERR ir_biop_exec_cmp_n_cmx(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = IS_EPSILON_EQUAL_CMX(
-                               a.n_cmx, b.n_cmx, FLT_PRECISION))
-    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !IS_EPSILON_EQUAL_CMX(
-                               a.n_cmx, b.n_cmx, FLT_PRECISION))
+    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = is_almost_equal_cmx(
+                               a.n_cmx, b.n_cmx, MAX_ULPS_DIFF))
+    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !is_almost_equal_cmx(
+                               a.n_cmx, b.n_cmx, MAX_ULPS_DIFF))
   default:
     return IR_ERR_ILL_NT;
   }

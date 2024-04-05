@@ -155,7 +155,22 @@ flt_t fac_flt(flt_t base, flt_t step) {
 
   for (int_t i = 1; i < step; ++i)
     rt *= pow(pow(step, (step - i) / step) / tgamma(i / step),
-               fac_flt_helper(base - i, step));
+              fac_flt_helper(base - i, step));
 
   return rt;
+}
+
+bol_t is_almost_equal_flt(flt_t x, flt_t y, int64_t maxDiffUlps) {
+  union flt_t_de x_de = {.lit = x};
+  union flt_t_de y_de = {.lit = y};
+
+  int64_t delta_xy_mant = llabs((int64_t)x_de.mant - (int64_t)y_de.mant);
+
+  return x == y || ((x_de.sign == y_de.sign) && (x_de.expo == y_de.expo) &&
+                    (delta_xy_mant < maxDiffUlps));
+}
+
+bol_t is_almost_equal_cmx(cmx_t x, cmx_t y, int64_t maxDiffUlps) {
+  return is_almost_equal_flt(creal(x), creal(y), maxDiffUlps) &&
+         is_almost_equal_flt(cimag(x), cimag(y), maxDiffUlps);
 }

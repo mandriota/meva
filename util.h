@@ -26,6 +26,8 @@
 #include <complex.h>
 #include <limits.h>
 #include <stdbool.h> // IWYU pragma: keep
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <tgmath.h> // IWYU pragma: keep
@@ -116,6 +118,8 @@ struct StringBuffer {
 };
 
 //=:util:types
+typedef long double complex cmx_t;
+
 typedef long double flt_t;
 
 #ifdef BITINT_MAXWIDTH
@@ -127,6 +131,8 @@ typedef long long int_t;
 
 typedef unsigned long long unt_t;
 #endif
+
+typedef bool bol_t;
 
 #define INT_T_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
@@ -158,19 +164,40 @@ union Primitive {
   flt_t n_flt;
   int_t n_int;
   unt_t n_unt;
-  bool n_bol;
+  bol_t n_bol;
 };
 
 int_t pow_int(int_t base, int_t expo);
 
 int_t fac_int(int_t base, int_t step);
 
-flt_t fac_flt(flt_t z, flt_t a);
+flt_t fac_flt(flt_t base, flt_t step);
 
-#define MAX(a, b) (a >= b ? a : b)
+_Static_assert(sizeof(flt_t) == 8 && "flt_t type must be 8-bytes large");
 
-#define IS_EPSILON_EQUAL_FLT(a, b, delta) (fabs(a - b) <= delta * MAX(a, b))
+#define IEEE754_DOUBLE_SIGN_SIZE 1
+#define IEEE754_DOUBLE_EXPO_SIZE 11
+#define IEEE754_DOUBLE_MANT_SIZE 52
 
-#define IS_EPSILON_EQUAL_CMX(a, b, delta)                                      \
-  IS_EPSILON_EQUAL_FLT(creal(a), creal(b), delta) &&                           \
-      IS_EPSILON_EQUAL_FLT(cimag(a), cimag(b), delta)
+#define IS_BIG_ENDIAN ('\x12\x34\x56\x78' == 0x12345678)
+
+union flt_t_de {
+  flt_t lit;
+#if IS_BIG_ENDIAN
+  struct {
+    uint64_t mant : IEEE754_DOUBLE_MANT_SIZE;
+    uint64_t expo : IEEE754_DOUBLE_EXPO_SIZE;
+    uint64_t sign : IEEE754_DOUBLE_SIGN_SIZE;
+  };
+#else
+  struct {
+    uint64_t sign : IEEE754_DOUBLE_SIGN_SIZE;
+    uint64_t expo : IEEE754_DOUBLE_EXPO_SIZE;
+    uint64_t mant : IEEE754_DOUBLE_MANT_SIZE;
+  };
+#endif
+};
+
+bol_t is_almost_equal_flt(flt_t x, flt_t y, int64_t maxDiffUlps);
+
+bol_t is_almost_equal_cmx(cmx_t x, cmx_t y, int64_t maxDiffUlps);

@@ -95,7 +95,7 @@
 #define REPL_RESULT_SUFFIX "\n"
 
 //=:config:math
-#define FLT_PRECISION 0.000001
+#define MAX_ULPS_DIFF (1<<10)
 
 //=:config:internal
 // must be at least 1
