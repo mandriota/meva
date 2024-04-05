@@ -179,11 +179,13 @@ _Static_assert(sizeof(flt_t) == 8 && "flt_t type must be 8-bytes large");
 #define IEEE754_DOUBLE_EXPO_SIZE 11
 #define IEEE754_DOUBLE_MANT_SIZE 52
 
-#define IS_BIG_ENDIAN ('\x12\x34\x56\x78' == 0x12345678)
+#if '\x12\x34\x56\x78' == 0x12345678
+#define USE_BIG_ENDIAN
+#endif
 
 union flt_t_de {
   flt_t lit;
-#if IS_BIG_ENDIAN
+#ifdef USE_BIG_ENDIAN
   struct {
     uint64_t mant : IEEE754_DOUBLE_MANT_SIZE;
     uint64_t expo : IEEE754_DOUBLE_EXPO_SIZE;

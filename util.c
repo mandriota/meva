@@ -21,6 +21,7 @@
 #include "util.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <tgmath.h>
 
 //=:util
@@ -164,10 +165,17 @@ bol_t is_almost_equal_flt(flt_t x, flt_t y, int64_t maxDiffUlps) {
   union flt_t_de x_de = {.lit = x};
   union flt_t_de y_de = {.lit = y};
 
+  if (llabs((int64_t)x_de.expo-(int64_t)y_de.expo) > 1)
+	return false;
+
+  if (x_de.expo > y_de.expo)
+    y_de.mant += maxDiffUlps;
+  else if (x_de.expo < y_de.expo)
+    x_de.mant += maxDiffUlps;
+
   int64_t delta_xy_mant = llabs((int64_t)x_de.mant - (int64_t)y_de.mant);
 
-  return x == y || ((x_de.sign == y_de.sign) && (x_de.expo == y_de.expo) &&
-                    (delta_xy_mant < maxDiffUlps));
+  return x == y || ((x_de.sign == y_de.sign) && (delta_xy_mant < maxDiffUlps));
 }
 
 bol_t is_almost_equal_cmx(cmx_t x, cmx_t y, int64_t maxDiffUlps) {
