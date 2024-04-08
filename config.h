@@ -69,16 +69,16 @@
 
 //=:config:output_format
 // source tree indentation
-#define SOURCE_INDENTATION 0
+#define SOURCE_INDENTATION (0)
 
 // source tree max depth
-#define SOURCE_MAX_DEPTH 100
+#define SOURCE_MAX_DEPTH (100)
 
 // result tree indentation
-#define RESULT_INDENTATION 1
+#define RESULT_INDENTATION (1)
 
 // result tree max depth
-#define RESULT_MAX_DEPTH 100
+#define RESULT_MAX_DEPTH (100)
 
 //=:config:pipe
 #define PIPE_RESULT_PREFIX "= "
@@ -95,10 +95,10 @@
 #define REPL_RESULT_SUFFIX "\n"
 
 //=:config:math
-#define MAX_ULPS_DIFF (10000000000)
+#define MAX_ULPS_DIFF (16)
 
 //=:config:internal
 // must be at least 1
-#define INTERNAL_READING_BUF_SIZE 512
+#define INTERNAL_READING_BUF_SIZE (512)
 
 
