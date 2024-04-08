@@ -159,7 +159,7 @@ void rd_next_char(struct Reader *rd) {
 }
 
 void rd_skip_whitespaces(struct Reader *rd) {
-  while (IS_WHITESPACE(rd->cc))
+  while (is_whitespace(rd->cc))
     rd_next_char(rd);
 }
 
@@ -272,7 +272,7 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
 
   bool overflow = false;
 
-  while (IS_DIGIT(lx->rd.cc)) {
+  while (is_digit(lx->rd.cc)) {
     if (!overflow) {
       *mnt = *mnt * 10 + lx->rd.cc - '0';
       pow10 *= 10;
@@ -330,7 +330,7 @@ void lx_next_token_symbol(struct Lexer *lx) {
 
   int bit_off = 0;
 
-  while (IS_LETTER(lx->rd.cc) || IS_DIGIT(lx->rd.cc)) {
+  while (is_letter(lx->rd.cc) || is_digit(lx->rd.cc)) {
     lx->pm.n_unt |= encode_symbol_c(lx->rd.cc) << bit_off;
     bit_off += 6;
     rd_next_char(&lx->rd);
@@ -399,9 +399,9 @@ void lx_next_token(struct Lexer *lx) {
     EXEC_CASE('\'', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('f', TT_FAL)
                                                        LX_TRY_C('t', TT_TRU)))
   default:
-    if (IS_DIGIT(lx->rd.cc) || lx->rd.cc == '.' || lx->rd.cc == 'i') {
+    if (is_digit(lx->rd.cc) || lx->rd.cc == '.' || lx->rd.cc == 'i') {
       lx_next_token_number(lx);
-    } else if (IS_LETTER(lx->rd.cc))
+    } else if (is_letter(lx->rd.cc))
       lx_next_token_symbol(lx);
   }
 }

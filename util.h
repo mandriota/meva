@@ -23,6 +23,7 @@
 
 #include "config.h"
 
+#include <assert.h>
 #include <complex.h>
 #include <limits.h>
 #include <stdbool.h> // IWYU pragma: keep
@@ -99,16 +100,17 @@
     break;
 
 //=:util:ascii
-#define IS_WHITESPACE(c)                                                       \
-  (c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n')
+inline bool is_whitespace(char c) {
+  return c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n';
+}
 
-#define IS_LOWER(c) (c >= 'a' && c <= 'z')
+inline bool is_lower(char c) { return c >= 'a' && c <= 'z'; }
 
-#define IS_UPPER(c) (c >= 'A' && c <= 'Z')
+inline bool is_upper(char c) { return c >= 'A' && c <= 'Z'; }
 
-#define IS_LETTER(c) (IS_LOWER(c) || IS_UPPER(c) || c == '_')
+inline bool is_letter(char c) { return is_lower(c) || is_upper(c) || c == '_'; }
 
-#define IS_DIGIT(c) (c >= '0' && c <= '9')
+inline bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
 //=:util:data_structures
 struct StringBuffer {
@@ -160,7 +162,7 @@ char *decode_symbol(char *dst, char *dst_end, unt_t src);
 char *int_stringify(char *dst, char *dst_end, int_t num);
 
 union Primitive {
-  long double complex n_cmx;
+	cmx_t n_cmx;
   flt_t n_flt;
   int_t n_int;
   unt_t n_unt;
@@ -173,11 +175,13 @@ int_t fac_int(int_t base, int_t step);
 
 flt_t fac_flt(flt_t base, flt_t step);
 
-_Static_assert(sizeof(flt_t) == 8 && "flt_t type must be 8-bytes large");
+static_assert(sizeof(flt_t) == 8, "flt_t type must be 8-bytes large");
 
-#define IEEE754_DOUBLE_SIGN_SIZE 1
-#define IEEE754_DOUBLE_EXPO_SIZE 11
-#define IEEE754_DOUBLE_MANT_SIZE 52
+enum {
+  IEEE754_DOUBLE_SIGN_SIZE = 1,
+  IEEE754_DOUBLE_EXPO_SIZE = 11,
+  IEEE754_DOUBLE_MANT_SIZE = 52,
+};
 
 #if '\x12\x34\x56\x78' == 0x12345678
 #define USE_BIG_ENDIAN

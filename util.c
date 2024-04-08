@@ -39,13 +39,13 @@ size_t align(size_t sz, size_t alignment) {
 
 //=:util:encoding
 unt_t encode_symbol_c(char c) {
-  if (IS_UPPER(c))
+  if (is_upper(c))
     return (c - 'A') + 1;
-  if (IS_LOWER(c))
+  if (is_lower(c))
     return (c - 'a') + ENC_OFF + 1;
   if (c == '_')
     return ENC_OFF * 2 + 1;
-  if (IS_DIGIT(c))
+  if (is_digit(c))
     return (c - '0') + ENC_OFF * 2 + 2;
 
   DBG_FATAL("symbol's character (%d) is out of range", c);
