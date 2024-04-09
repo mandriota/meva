@@ -162,7 +162,7 @@ char *decode_symbol(char *dst, char *dst_end, unt_t src);
 char *int_stringify(char *dst, char *dst_end, int_t num);
 
 union Primitive {
-	cmx_t n_cmx;
+  cmx_t n_cmx;
   flt_t n_flt;
   int_t n_int;
   unt_t n_unt;
@@ -175,13 +175,29 @@ int_t fac_int(int_t base, int_t step);
 
 flt_t fac_flt(flt_t base, flt_t step);
 
+#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) ||           \
+	defined(__x86_64) || defined(__i386__) || defined(__i386)
+static_assert(sizeof(flt_t) == 12, "flt_t type must be 12-bytes large");
+enum {
+  IEEE754_DOUBLE_SIGN_SIZE = 1,
+  IEEE754_DOUBLE_EXPO_SIZE = 15,
+  IEEE754_DOUBLE_MANT_SIZE = 64,
+};
+#elif defined(__aarch64__) || defined(__aarch64)
 static_assert(sizeof(flt_t) == 8, "flt_t type must be 8-bytes large");
-
 enum {
   IEEE754_DOUBLE_SIGN_SIZE = 1,
   IEEE754_DOUBLE_EXPO_SIZE = 11,
   IEEE754_DOUBLE_MANT_SIZE = 52,
 };
+#elif defined(__arm__) || defined(__arm)
+static_assert(sizeof(flt_t) == 4, "flt_t type must be 8-bytes large");
+enum {
+  IEEE754_DOUBLE_SIGN_SIZE = 1,
+  IEEE754_DOUBLE_EXPO_SIZE = 8,
+  IEEE754_DOUBLE_MANT_SIZE = 23,
+};
+#endif
 
 #if '\x12\x34\x56\x78' == 0x12345678
 #define USE_BIG_ENDIAN

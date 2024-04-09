@@ -554,7 +554,6 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
     printf(CLR_PRIM "%Lf\n" CLR_RESET, node->as.pm.n_flt);
     return;
   case NT_PRIM_CMX:
-    printf(CLR_PRIM "");
     if (creal(node->as.pm.n_cmx) != 0 && cimag(node->as.pm.n_cmx) != 0) {
       printf(CLR_PRIM "%Lf %Lfi\n" CLR_RESET, creal(node->as.pm.n_cmx),
              cimag(node->as.pm.n_cmx));
