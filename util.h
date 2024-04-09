@@ -191,7 +191,7 @@ enum {
   IEEE754_DOUBLE_MANT_SIZE = 52,
 };
 #elif defined(__arm__) || defined(__arm)
-static_assert(sizeof(flt_t) == 4, "flt_t type must be 8-bytes large");
+static_assert(sizeof(flt_t) == 4, "flt_t type must be 4-bytes large");
 enum {
   IEEE754_DOUBLE_SIGN_SIZE = 1,
   IEEE754_DOUBLE_EXPO_SIZE = 8,
