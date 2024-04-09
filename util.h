@@ -220,6 +220,6 @@ union flt_t_de {
 #endif
 };
 
-bol_t is_almost_equal_flt(flt_t x, flt_t y, int64_t maxDiffUlps);
+bol_t is_almost_equal_flt(flt_t x, flt_t y);
 
-bol_t is_almost_equal_cmx(cmx_t x, cmx_t y, int64_t maxDiffUlps);
+bol_t is_almost_equal_cmx(cmx_t x, cmx_t y);

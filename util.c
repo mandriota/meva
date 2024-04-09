@@ -161,24 +161,30 @@ flt_t fac_flt(flt_t base, flt_t step) {
   return rt;
 }
 
-bol_t is_almost_equal_flt(flt_t x, flt_t y, int64_t maxDiffUlps) {
+bol_t is_almost_equal_flt(flt_t x, flt_t y) {
   union flt_t_de x_de = {.lit = x};
   union flt_t_de y_de = {.lit = y};
+
+  if (x < MAX_DIFF_ULPS_FROM || y < MAX_DIFF_ULPS_FROM) {
+    if (fabsl(x - y) < MAX_DIFF_ABS)
+      return true;
+		return false;
+  }
 
   if (llabs((int64_t)x_de.expo - (int64_t)y_de.expo) > 1)
     return false;
 
   if (x_de.expo > y_de.expo)
-    y_de.mant += maxDiffUlps;
+    y_de.mant += MAX_DIFF_ULPS;
   else if (x_de.expo < y_de.expo)
-    x_de.mant += maxDiffUlps;
+    x_de.mant += MAX_DIFF_ULPS;
 
   int64_t delta_xy_mant = llabs((int64_t)x_de.mant - (int64_t)y_de.mant);
 
-  return x == y || ((x_de.sign == y_de.sign) && (delta_xy_mant < maxDiffUlps));
+  return x == y || ((x_de.sign == y_de.sign) && (delta_xy_mant < MAX_DIFF_ULPS));
 }
 
-bol_t is_almost_equal_cmx(cmx_t x, cmx_t y, int64_t maxDiffUlps) {
-  return is_almost_equal_flt(creal(x), creal(y), maxDiffUlps) &&
-         is_almost_equal_flt(cimag(x), cimag(y), maxDiffUlps);
+bol_t is_almost_equal_cmx(cmx_t x, cmx_t y) {
+  return is_almost_equal_flt(creal(x), creal(y)) &&
+         is_almost_equal_flt(cimag(x), cimag(y));
 }

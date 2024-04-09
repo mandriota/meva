@@ -1044,16 +1044,14 @@ enum IR_ERR ir_biop_exec_cmp_n_flt(struct Node *dst, enum NodeType op,
     EXEC_CASE(NT_BIOP_LES, dst->as.pm.n_bol = a.n_flt < b.n_flt)
     EXEC_CASE(NT_BIOP_GEQ,
               dst->as.pm.n_bol =
-                  is_almost_equal_flt(a.n_flt, b.n_flt, MAX_ULPS_DIFF) ||
-                  a.n_flt > b.n_flt)
+                  is_almost_equal_flt(a.n_flt, b.n_flt) || a.n_flt > b.n_flt)
     EXEC_CASE(NT_BIOP_LEQ,
               dst->as.pm.n_bol =
-                  is_almost_equal_flt(a.n_flt, b.n_flt, MAX_ULPS_DIFF) ||
-                  a.n_flt < b.n_flt)
-    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = is_almost_equal_flt(
-                               a.n_flt, b.n_flt, MAX_ULPS_DIFF))
-    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !is_almost_equal_flt(
-                               a.n_flt, b.n_flt, MAX_ULPS_DIFF))
+                  is_almost_equal_flt(a.n_flt, b.n_flt) || a.n_flt < b.n_flt)
+    EXEC_CASE(NT_BIOP_EQU,
+              dst->as.pm.n_bol = is_almost_equal_flt(a.n_flt, b.n_flt))
+    EXEC_CASE(NT_BIOP_NEQ,
+              dst->as.pm.n_bol = !is_almost_equal_flt(a.n_flt, b.n_flt))
   default:
     return IR_ERR_ILL_NT;
   }
@@ -1090,10 +1088,10 @@ enum IR_ERR ir_biop_exec_cmp_n_cmx(struct Node *dst, enum NodeType op,
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_EQU, dst->as.pm.n_bol = is_almost_equal_cmx(
-                               a.n_cmx, b.n_cmx, MAX_ULPS_DIFF))
-    EXEC_CASE(NT_BIOP_NEQ, dst->as.pm.n_bol = !is_almost_equal_cmx(
-                               a.n_cmx, b.n_cmx, MAX_ULPS_DIFF))
+    EXEC_CASE(NT_BIOP_EQU,
+              dst->as.pm.n_bol = is_almost_equal_cmx(a.n_cmx, b.n_cmx))
+    EXEC_CASE(NT_BIOP_NEQ,
+              dst->as.pm.n_bol = !is_almost_equal_cmx(a.n_cmx, b.n_cmx))
   default:
     return IR_ERR_ILL_NT;
   }
