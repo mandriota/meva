@@ -165,8 +165,8 @@ bol_t is_almost_equal_flt(flt_t x, flt_t y, int64_t maxDiffUlps) {
   union flt_t_de x_de = {.lit = x};
   union flt_t_de y_de = {.lit = y};
 
-  if (llabs((int64_t)x_de.expo-(int64_t)y_de.expo) > 1)
-	return false;
+  if (llabs((int64_t)x_de.expo - (int64_t)y_de.expo) > 1)
+    return false;
 
   if (x_de.expo > y_de.expo)
     y_de.mant += maxDiffUlps;
