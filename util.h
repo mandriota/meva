@@ -132,9 +132,9 @@ typedef _BitInt(BITINT_MAXWIDTH) int_t;
 
 typedef unsigned _BitInt(BITINT_MAXWIDTH) unt_t;
 #else
-typedef long long int_t;
+typedef int64_t int_t;
 
-typedef unsigned long long unt_t;
+typedef uint64_t unt_t;
 #endif
 
 typedef bool bol_t;

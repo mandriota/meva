@@ -122,13 +122,13 @@ int_t pow_int(int_t base, int_t expo) {
     return base;
 
   int_t rt = 1;
-  while (expo > 0) {
+  while (expo > 1) {
     if (expo % 2 == 1)
       rt *= base;
     expo /= 2;
     base *= base;
   }
-  return rt;
+  return rt * base;
 }
 
 int_t fac_int(int_t base, int_t step) {
@@ -176,9 +176,11 @@ bol_t is_almost_equal_flt(flt_t x, flt_t y) {
   else if (x_ieee754.expo < y_ieee754.expo)
     x_ieee754.mant += MAX_DIFF_ULPS;
 
-  int64_t delta_xy_mant = llabs((int64_t)x_ieee754.mant - (int64_t)y_ieee754.mant);
+  int64_t delta_xy_mant =
+      llabs((int64_t)x_ieee754.mant - (int64_t)y_ieee754.mant);
 
-  return x == y || ((x_ieee754.sign == y_ieee754.sign) && (delta_xy_mant < MAX_DIFF_ULPS));
+  return x == y || ((x_ieee754.sign == y_ieee754.sign) &&
+                    (delta_xy_mant < MAX_DIFF_ULPS));
 }
 
 bol_t is_almost_equal_cmx(cmx_t x, cmx_t y) {
