@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <tgmath.h> // IWYU pragma: keep
 // IWYU pragma: no_include <math.h>
+#include <float.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846264338327950288
@@ -65,10 +66,10 @@
     fflush(stderr);                                                            \
   }
 
-#define TRY(prefix, expr)                                                      \
+#define TRY(type, expr)                                                        \
   {                                                                            \
-    enum prefix err = expr;                                                    \
-    if (err != prefix##_NOERROR)                                               \
+    type err = expr;                                                           \
+    if (err != type##_NOERROR)                                                 \
       return err;                                                              \
   }
 
@@ -113,11 +114,11 @@ inline bool is_letter(char c) { return is_lower(c) || is_upper(c) || c == '_'; }
 inline bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
 //=:util:data_structures
-struct StringBuffer {
+typedef struct {
   char *data;
   size_t len;
   size_t cap;
-};
+} StringBuffer;
 
 //=:util:types
 typedef long double complex cmx_t;
@@ -161,13 +162,13 @@ char *decode_symbol(char *dst, char *dst_end, unt_t src);
 
 char *int_stringify(char *dst, char *dst_end, int_t num);
 
-union Primitive {
+typedef union {
   cmx_t n_cmx;
   flt_t n_flt;
   int_t n_int;
   unt_t n_unt;
   bol_t n_bol;
-};
+} Primitive;
 
 int_t pow_int(int_t base, int_t expo);
 
@@ -175,50 +176,26 @@ int_t fac_int(int_t base, int_t step);
 
 flt_t fac_flt(flt_t base, flt_t step);
 
-#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) ||           \
-	defined(__x86_64) || defined(__i386__) || defined(__i386)
-static_assert(sizeof(flt_t) == 12, "flt_t type must be 12-bytes large");
-enum {
-  IEEE754_DOUBLE_SIGN_SIZE = 1,
-  IEEE754_DOUBLE_EXPO_SIZE = 15,
-  IEEE754_DOUBLE_MANT_SIZE = 64,
-};
-#elif defined(__aarch64__) || defined(__aarch64)
-static_assert(sizeof(flt_t) == 8, "flt_t type must be 8-bytes large");
-enum {
-  IEEE754_DOUBLE_SIGN_SIZE = 1,
-  IEEE754_DOUBLE_EXPO_SIZE = 11,
-  IEEE754_DOUBLE_MANT_SIZE = 52,
-};
-#elif defined(__arm__) || defined(__arm)
-static_assert(sizeof(flt_t) == 4, "flt_t type must be 4-bytes large");
-enum {
-  IEEE754_DOUBLE_SIGN_SIZE = 1,
-  IEEE754_DOUBLE_EXPO_SIZE = 8,
-  IEEE754_DOUBLE_MANT_SIZE = 23,
-};
-#endif
-
 #if '\x12\x34\x56\x78' == 0x12345678
 #define USE_BIG_ENDIAN
 #endif
 
-union flt_t_de {
+typedef union {
   flt_t lit;
 #ifdef USE_BIG_ENDIAN
   struct {
-    uint64_t mant : IEEE754_DOUBLE_MANT_SIZE;
-    uint64_t expo : IEEE754_DOUBLE_EXPO_SIZE;
-    uint64_t sign : IEEE754_DOUBLE_SIGN_SIZE;
+    uint64_t mant : LDBL_MANT_DIG - 1;
+    uint64_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
+    uint64_t sign : 1;
   };
 #else
   struct {
-    uint64_t sign : IEEE754_DOUBLE_SIGN_SIZE;
-    uint64_t expo : IEEE754_DOUBLE_EXPO_SIZE;
-    uint64_t mant : IEEE754_DOUBLE_MANT_SIZE;
+    uint64_t sign : 1;
+    uint64_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
+    uint64_t mant : LDBL_MANT_DIG - 1;
   };
 #endif
-};
+} IEEE754_flt_t;
 
 bol_t is_almost_equal_flt(flt_t x, flt_t y);
 

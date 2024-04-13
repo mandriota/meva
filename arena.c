@@ -24,22 +24,22 @@
 
 #include <assert.h>
 
-struct Chunk {
+typedef struct Chunk {
   struct Chunk *next;
 
   bool used : 1;
 
   size_t size : sizeof(size_t) - 1;
   size_t data[];
-};
+} Chunk;
 
-struct Chunk *chunk_from_data(void *data) { return (struct Chunk *)data - 1; }
+Chunk *chunk_from_data(void *data) { return (Chunk *)data - 1; }
 
-struct Chunk *chunk_alloc(size_t sz) {
-  size_t data_sz = align(sz, _Alignof(struct Chunk));
-  size_t total = data_sz + sizeof(struct Chunk);
+Chunk *chunk_alloc(size_t sz) {
+  size_t data_sz = align(sz, _Alignof(Chunk));
+  size_t total = data_sz + sizeof(Chunk);
 
-  struct Chunk *chunk = malloc(total);
+  Chunk *chunk = malloc(total);
   assert(chunk != NULL);
 
   chunk->next = NULL;
@@ -49,13 +49,13 @@ struct Chunk *chunk_alloc(size_t sz) {
   return chunk;
 }
 
-void *arena_acquire(struct Arena *arena, size_t sz) {
+void *arena_acquire(Arena *arena, size_t sz) {
   if (arena->head == NULL) {
     arena->head = chunk_alloc(sz);
     return arena->head->data;
   }
 
-  struct Chunk *chunk_p = arena->head;
+  Chunk *chunk_p = arena->head;
 
   while ((chunk_p->used || chunk_p->size * sizeof(chunk_p->data[0]) < sz) &&
          chunk_p->next != NULL) {
@@ -73,8 +73,8 @@ void *arena_acquire(struct Arena *arena, size_t sz) {
 
 void arena_release(void *data) { chunk_from_data(data)->used = false; }
 
-void arena_reset(struct Arena *arena) {
-  struct Chunk *chunk = arena->head;
+void arena_reset(Arena *arena) {
+  Chunk *chunk = arena->head;
 
   while (chunk != NULL) {
     chunk->used = false;
@@ -82,8 +82,8 @@ void arena_reset(struct Arena *arena) {
   }
 }
 
-void arena_dealloc(struct Arena *arena) {
-  struct Chunk *chunk = arena->head, *next_chunk;
+void arena_dealloc(Arena *arena) {
+  Chunk *chunk = arena->head, *next_chunk;
 
   while (chunk != NULL) {
     next_chunk = chunk->next;

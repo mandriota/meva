@@ -23,17 +23,17 @@
 
 #include <stdlib.h>
 
-struct Arena {
+typedef struct {
   struct Chunk *head;
-};
+} Arena;
 
-void *arena_acquire(struct Arena *arena, size_t count);
+void *arena_acquire(Arena *arena, size_t count);
 
 void arena_release(void *data);
 
-void arena_reset(struct Arena *arena);
+void arena_reset(Arena *arena);
 
-void arena_dealloc(struct Arena *arena);
+void arena_dealloc(Arena *arena);
 
 #define ARENA_NEW(arena, type) ((type *)arena_acquire(arena, sizeof(type)))
 

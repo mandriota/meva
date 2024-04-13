@@ -73,7 +73,7 @@ when no command line arguments are passed
 #endif
 
 //=:globals
-static struct Arena default_arena = {.head = NULL};
+static Arena default_arena = {.head = NULL};
 
 //=:reader
 //                        _
@@ -83,8 +83,8 @@ static struct Arena default_arena = {.head = NULL};
 //    | | |  __/ (_| | (_| |  __/ |
 //    |_|  \___|\__,_|\__,_|\___|_|
 
-struct Reader {
-  struct StringBuffer page;
+typedef struct {
+  StringBuffer page;
 
   FILE *src;
 
@@ -100,9 +100,9 @@ struct Reader {
   bool eof;
   bool eos;
   bool eoi;
-};
+} Reader;
 
-void rd_reset_counters(struct Reader *rd) {
+void rd_reset_counters(Reader *rd) {
   rd->ptr = rd->mrk = 0;
   rd->row = rd->col = 0;
   rd->eof = rd->eos = false;
@@ -110,11 +110,11 @@ void rd_reset_counters(struct Reader *rd) {
   rd->prv = false;
 }
 
-void rd_prev(struct Reader *rd) {
+void rd_prev(Reader *rd) {
   rd->prv = rd->mrk == -1 || (size_t)rd->mrk != rd->ptr;
 }
 
-void rd_next_page(struct Reader *rd) {
+void rd_next_page(Reader *rd) {
   rd->ptr = 0;
   rd->mrk = -1;
 
@@ -132,7 +132,7 @@ void rd_next_page(struct Reader *rd) {
     rd->cc = '\0';
 }
 
-void rd_next_char(struct Reader *rd) {
+void rd_next_char(Reader *rd) {
   if (rd->prv) {
     rd->prv = false;
     return;
@@ -158,12 +158,12 @@ void rd_next_char(struct Reader *rd) {
   rd->cc = rd->page.data[rd->ptr];
 }
 
-void rd_skip_whitespaces(struct Reader *rd) {
+void rd_skip_whitespaces(Reader *rd) {
   while (is_whitespace(rd->cc))
     rd_next_char(rd);
 }
 
-void rd_skip_line(struct Reader *rd) {
+void rd_skip_line(Reader *rd) {
   while (rd->cc != '\0' && rd->cc != '\n')
     rd_next_char(rd);
 }
@@ -177,7 +177,7 @@ void rd_skip_line(struct Reader *rd) {
 //    |_|\___/_/\_\___|_|
 
 //=:lexer:tokens
-enum TokenType {
+typedef enum {
   TT_ILL = -1,
   TT_EOS = 0,
 
@@ -218,9 +218,9 @@ enum TokenType {
   TT_ABS,
 
   TT_EOX,
-};
+} TokenType;
 
-const char *tt_stringify(enum TokenType tt) {
+const char *tt_stringify(TokenType tt) {
   switch (tt) {
     STRINGIFY_CASE(TT_ILL)
     STRINGIFY_CASE(TT_EOS)
@@ -257,14 +257,14 @@ const char *tt_stringify(enum TokenType tt) {
 }
 
 //=:lexer:lexer
-struct Lexer {
-  struct Reader rd;
+typedef struct {
+  Reader rd;
 
-  enum TokenType tt;
-  union Primitive pm;
-};
+  TokenType tt;
+  Primitive pm;
+} Lexer;
 
-int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
+int_t lx_read_integer(Lexer *lx, int_t *mnt, int_t *exp) {
   *mnt = 0;
   *exp = 0;
 
@@ -288,7 +288,7 @@ int_t lx_read_integer(struct Lexer *lx, int_t *mnt, int_t *exp) {
   return pow10;
 }
 
-void lx_next_token_number(struct Lexer *lx) {
+void lx_next_token_number(Lexer *lx) {
   lx->tt = TT_ILL;
 
   int_t decimal_log10, mnt, exp;
@@ -324,7 +324,7 @@ void lx_next_token_number(struct Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-void lx_next_token_symbol(struct Lexer *lx) {
+void lx_next_token_symbol(Lexer *lx) {
   lx->tt = TT_SYM;
   lx->pm.n_unt = 0;
 
@@ -339,7 +339,7 @@ void lx_next_token_symbol(struct Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-void lx_next_token_factorial(struct Lexer *lx) {
+void lx_next_token_factorial(Lexer *lx) {
   lx->tt = TT_FAC;
 
   for (lx->pm.n_unt = 0; lx->rd.cc == '!'; ++lx->pm.n_unt)
@@ -372,7 +372,7 @@ void lx_next_token_factorial(struct Lexer *lx) {
     break;                                                                     \
   }
 
-void lx_next_token(struct Lexer *lx) {
+void lx_next_token(Lexer *lx) {
   rd_next_char(&lx->rd);
   rd_skip_whitespaces(&lx->rd);
 
@@ -415,7 +415,7 @@ void lx_next_token(struct Lexer *lx) {
 //    |_|
 
 //=:parser:nodes
-enum NodeType {
+typedef enum {
   NT_PRIM_SYM = TT_SYM,
   NT_PRIM_INT = TT_INT,
   NT_PRIM_FLT = TT_FLT,
@@ -454,9 +454,9 @@ enum NodeType {
   NT_FUNC,
   NT_CALL,
   NT_CALL_ANON,
-};
+} NodeType;
 
-const char *nt_stringify(enum NodeType nt) {
+const char *nt_stringify(NodeType nt) {
   switch (nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
     STRINGIFY_CASE(NT_PRIM_INT)
@@ -491,41 +491,41 @@ const char *nt_stringify(enum NodeType nt) {
   return STRINGIFY(INVALID_NT);
 }
 
-struct Node; // IWYU pragma: keep
+typedef struct Node Node; // IWYU pragma: keep
 
-struct UnOp {
-  struct Node *arg;
-};
+typedef struct {
+  Node *arg;
+} UnOp;
 
-struct BiOp {
-  struct Node *l_arg, *r_arg;
-};
+typedef struct {
+  Node *l_arg, *r_arg;
+} BiOp;
 
-struct Fn {
-  struct Node *spec;
-  struct Node *expr;
-};
+typedef struct {
+  Node *spec;
+  Node *expr;
+} Fn;
 
-struct FnCall {
+typedef struct {
   union {
     unt_t *ident;
-    struct Fn *fn;
+    Fn *fn;
   } func;
-  struct Node *arg;
-};
+  Node *arg;
+} FnCall;
 
 struct Node {
-  enum NodeType type;
+  NodeType type;
 
   union {
-    union Primitive pm;
-    struct UnOp up;
-    struct BiOp bp;
-    struct FnCall call;
+    Primitive pm;
+    UnOp up;
+    BiOp bp;
+    FnCall call;
   } as;
 };
 
-void nd_tree_print(struct Node *node, int depth, int depth_max) {
+void nd_tree_print(Node *node, int depth, int depth_max) {
   if (node == NULL || depth >= depth_max)
     return;
 
@@ -606,7 +606,7 @@ void nd_tree_print(struct Node *node, int depth, int depth_max) {
 }
 
 //=:parser:priority
-enum Priority {
+typedef enum {
   PT_SKIP_RP0,
   PT_LET0,
   PT_LET1,
@@ -620,9 +620,9 @@ enum Priority {
   PT_POW1,
   PT_FAC,
   PT_PRIM,
-};
+} Priority;
 
-bool pt_includes_tt(enum Priority pt, enum TokenType tt) {
+bool pt_includes_tt(Priority pt, TokenType tt) {
   switch (pt) {
   case PT_LET0:
     return tt == TT_LET;
@@ -649,17 +649,17 @@ bool pt_includes_tt(enum Priority pt, enum TokenType tt) {
   }
 }
 
-bool pt_rl_biop(enum Priority pt) { return pt == PT_LET0 || pt == PT_POW0; }
+bool pt_rl_biop(Priority pt) { return pt == PT_LET0 || pt == PT_POW0; }
 
 //=:parser:parser
-struct Parser {
-  struct Lexer lx;
+typedef struct {
+  Lexer lx;
 
   ssize_t p0c;
   bool abs;
-};
+} Parser;
 
-enum PR_ERR {
+typedef enum {
   PR_ERR_NOERROR,
   PR_ERR_GENERAL,
   PR_ERR_PAREN_NOT_OPENED,
@@ -670,9 +670,9 @@ enum PR_ERR {
   PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED,
   PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED,
   PR_ERR_TOKEN_UNEXPECTED,
-};
+} PR_ERR;
 
-const char *pr_err_stringify(enum PR_ERR pr_err) {
+const char *pr_err_stringify(PR_ERR pr_err) {
   switch (pr_err) {
     STRINGIFY_CASE(PR_ERR_NOERROR)
     STRINGIFY_CASE(PR_ERR_GENERAL)
@@ -689,10 +689,9 @@ const char *pr_err_stringify(enum PR_ERR pr_err) {
   return STRINGIFY(INVALID_PR_ERR);
 }
 
-enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt);
+PR_ERR pr_call(Parser *pr, Node **node, Priority pt);
 
-enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
-                                   enum Priority pt) {
+PR_ERR pr_next_primitive_node(Parser *pr, Node **node, Priority pt) {
   switch (pr->lx.tt) {
   case TT_ILL:
     return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
@@ -729,7 +728,7 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
       return PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED;
     pr->abs = true;
     (*node)->type = NT_UNOP_ABS;
-    (*node)->as.up.arg = ARENA_NEW(&default_arena, struct Node);
+    (*node)->as.up.arg = ARENA_NEW(&default_arena, Node);
     lx_next_token(&pr->lx);
     return pr_call(pr, &(*node)->as.up.arg, pt);
   case TT_LP0:
@@ -747,14 +746,13 @@ enum PR_ERR pr_next_primitive_node(struct Parser *pr, struct Node **node,
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_unop_next_node(struct Parser *pr, struct Node **node,
-                              enum Priority pt) {
+PR_ERR pr_unop_next_node(Parser *pr, Node **node, Priority pt) {
   if (pt_includes_tt(pt, pr->lx.tt)) {
     (*node)->type = NT_UNOP_NOT * (pr->lx.tt == TT_NOT) +
                     NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
                     NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
 
-    (*node)->as.up.arg = ARENA_NEW(&default_arena, struct Node);
+    (*node)->as.up.arg = ARENA_NEW(&default_arena, Node);
 
     lx_next_token(&pr->lx);
 
@@ -764,17 +762,16 @@ enum PR_ERR pr_unop_next_node(struct Parser *pr, struct Node **node,
   return pr_call(pr, node, pt);
 }
 
-enum PR_ERR pr_biop_next_node(struct Parser *pr, struct Node **node,
-                              enum Priority pt) {
+PR_ERR pr_biop_next_node(Parser *pr, Node **node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
-  struct Node *node_p;
+  Node *node_p;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
-    node_p = ARENA_NEW(&default_arena, struct Node);
-    node_p->type = (enum NodeType)pr->lx.tt;
+    node_p = ARENA_NEW(&default_arena, Node);
+    node_p->type = (NodeType)pr->lx.tt;
     node_p->as.bp.l_arg = *node;
-    node_p->as.bp.r_arg = ARENA_NEW(&default_arena, struct Node);
+    node_p->as.bp.r_arg = ARENA_NEW(&default_arena, Node);
 
     lx_next_token(&pr->lx);
     TRY(PR_ERR, pr_call(pr, &node_p->as.bp.r_arg, pt + pt_rl_biop(pt)));
@@ -785,18 +782,17 @@ enum PR_ERR pr_biop_next_node(struct Parser *pr, struct Node **node,
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_biop_next_node_fac(struct Parser *pr, struct Node **node,
-                                  enum Priority pt) {
+PR_ERR pr_biop_next_node_fac(Parser *pr, Node **node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
-  struct Node *node_p;
+  Node *node_p;
 
   if (pt_includes_tt(pt, pr->lx.tt)) {
-    node_p = ARENA_NEW(&default_arena, struct Node);
+    node_p = ARENA_NEW(&default_arena, Node);
     node_p->type = NT_BIOP_FAC;
     node_p->as.bp.l_arg = *node;
 
-    node_p->as.bp.r_arg = ARENA_NEW(&default_arena, struct Node);
+    node_p->as.bp.r_arg = ARENA_NEW(&default_arena, Node);
     node_p->as.bp.r_arg->type = NT_PRIM_INT;
     node_p->as.bp.r_arg->as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
@@ -807,8 +803,7 @@ enum PR_ERR pr_biop_next_node_fac(struct Parser *pr, struct Node **node,
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
-                        enum Priority pt) {
+PR_ERR pr_skip_rp0(Parser *pr, Node **node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
   if (pr->lx.tt == TT_RP0) {
@@ -824,14 +819,14 @@ enum PR_ERR pr_skip_rp0(struct Parser *pr, struct Node **node,
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_next_node(struct Parser *pr, struct Node **node) {
+PR_ERR pr_next_node(Parser *pr, Node **node) {
   lx_next_token(&pr->lx);
   TRY(PR_ERR, pr_call(pr, node, 0));
 
   return PR_ERR_NOERROR;
 }
 
-enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
+PR_ERR pr_call(Parser *pr, Node **node, Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
     return pr_biop_next_node(pr, node, PT_LET0);
@@ -875,18 +870,16 @@ enum PR_ERR pr_call(struct Parser *pr, struct Node **node, enum Priority pt) {
 //                         | |
 //                         |_|
 
-struct Interpreter; // IWYU pragma: keep
-
-enum IR_ERR {
+typedef enum {
   IR_ERR_NOERROR,
   IR_ERR_ILL_NT,
   IR_ERR_NUM_ARG_EXPECTED,
   IR_ERR_DIV_BY_ZERO,
   IR_ERR_NOT_DEFINED_FOR_TYPE,
   IR_ERR_NOT_IMPLEMENTED,
-};
+} IR_ERR;
 
-const char *ir_err_stringify(enum IR_ERR ir_err) {
+const char *ir_err_stringify(IR_ERR ir_err) {
   switch (ir_err) {
     STRINGIFY_CASE(IR_ERR_NOERROR)
     STRINGIFY_CASE(IR_ERR_ILL_NT)
@@ -899,10 +892,9 @@ const char *ir_err_stringify(enum IR_ERR ir_err) {
   return STRINGIFY(INVALID_IR_ERR);
 }
 
-enum IR_ERR ir_exec(struct Node *dst, struct Node *src);
+IR_ERR ir_exec(Node *dst, Node *src);
 
-enum IR_ERR ir_unop_exec_n_int(struct Node *dst, enum NodeType op,
-                               union Primitive a) {
+IR_ERR ir_unop_exec_n_int(Node *dst, NodeType op, Primitive a) {
   dst->type = NT_PRIM_INT;
 
   switch (op) {
@@ -916,8 +908,7 @@ enum IR_ERR ir_unop_exec_n_int(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_unop_exec_n_flt(struct Node *dst, enum NodeType op,
-                               union Primitive a) {
+IR_ERR ir_unop_exec_n_flt(Node *dst, NodeType op, Primitive a) {
   dst->type = NT_PRIM_FLT;
 
   switch (op) {
@@ -931,8 +922,7 @@ enum IR_ERR ir_unop_exec_n_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_unop_exec_n_cmx(struct Node *dst, enum NodeType op,
-                               union Primitive a) {
+IR_ERR ir_unop_exec_n_cmx(Node *dst, NodeType op, Primitive a) {
   dst->type = NT_PRIM_CMX;
 
   switch (op) {
@@ -949,8 +939,7 @@ enum IR_ERR ir_unop_exec_n_cmx(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_unop_exec_n_bol(struct Node *dst, enum NodeType op,
-                               union Primitive a) {
+IR_ERR ir_unop_exec_n_bol(Node *dst, NodeType op, Primitive a) {
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
@@ -962,10 +951,10 @@ enum IR_ERR ir_unop_exec_n_bol(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
+IR_ERR ir_unop_exec(Node *dst, Node *src) {
   TRY(IR_ERR, ir_exec(dst, src->as.up.arg));
-  enum NodeType node_a_type = dst->type;
-  union Primitive node_a_value = dst->as.pm;
+  NodeType node_a_type = dst->type;
+  Primitive node_a_value = dst->as.pm;
 
   switch (node_a_type) {
   case NT_PRIM_BOL:
@@ -981,8 +970,8 @@ enum IR_ERR ir_unop_exec(struct Node *dst, struct Node *src) {
   }
 }
 
-enum IR_ERR ir_biop_exec_cmp_n_int(struct Node *dst, enum NodeType op,
-                                   union Primitive a, union Primitive b) {
+IR_ERR ir_biop_exec_cmp_n_int(Node *dst, NodeType op, Primitive a,
+                              Primitive b) {
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
@@ -999,8 +988,7 @@ enum IR_ERR ir_biop_exec_cmp_n_int(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_biop_exec_n_int(struct Node *dst, enum NodeType op,
-                               union Primitive a, union Primitive b) {
+IR_ERR ir_biop_exec_n_int(Node *dst, NodeType op, Primitive a, Primitive b) {
   dst->type = NT_PRIM_INT;
 
   switch (op) {
@@ -1035,8 +1023,8 @@ enum IR_ERR ir_biop_exec_n_int(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_biop_exec_cmp_n_flt(struct Node *dst, enum NodeType op,
-                                   union Primitive a, union Primitive b) {
+IR_ERR ir_biop_exec_cmp_n_flt(Node *dst, NodeType op, Primitive a,
+                              Primitive b) {
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
@@ -1059,8 +1047,7 @@ enum IR_ERR ir_biop_exec_cmp_n_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_biop_exec_n_flt(struct Node *dst, enum NodeType op,
-                               union Primitive a, union Primitive b) {
+IR_ERR ir_biop_exec_n_flt(Node *dst, NodeType op, Primitive a, Primitive b) {
   dst->type = NT_PRIM_FLT;
 
   switch (op) {
@@ -1083,8 +1070,8 @@ enum IR_ERR ir_biop_exec_n_flt(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_biop_exec_cmp_n_cmx(struct Node *dst, enum NodeType op,
-                                   union Primitive a, union Primitive b) {
+IR_ERR ir_biop_exec_cmp_n_cmx(Node *dst, NodeType op, Primitive a,
+                              Primitive b) {
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
@@ -1099,8 +1086,7 @@ enum IR_ERR ir_biop_exec_cmp_n_cmx(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_biop_exec_n_cmx(struct Node *dst, enum NodeType op,
-                               union Primitive a, union Primitive b) {
+IR_ERR ir_biop_exec_n_cmx(Node *dst, NodeType op, Primitive a, Primitive b) {
   dst->type = NT_PRIM_CMX;
 
   switch (op) {
@@ -1124,8 +1110,7 @@ enum IR_ERR ir_biop_exec_n_cmx(struct Node *dst, enum NodeType op,
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_biop_exec_n_bol(struct Node *dst, enum NodeType op,
-                               union Primitive a, union Primitive b) {
+IR_ERR ir_biop_exec_n_bol(Node *dst, NodeType op, Primitive a, Primitive b) {
   dst->type = NT_PRIM_BOL;
 
   switch (op) {
@@ -1151,14 +1136,14 @@ enum IR_ERR ir_biop_exec_n_bol(struct Node *dst, enum NodeType op,
     node_##name##_value.to = node_##name##_value.from;                         \
   }
 
-enum IR_ERR ir_biop_exec(struct Node *dst, struct Node *src) {
+IR_ERR ir_biop_exec(Node *dst, Node *src) {
   TRY(IR_ERR, ir_exec(dst, src->as.bp.l_arg));
-  enum NodeType node_a_type = dst->type;
-  union Primitive node_a_value = dst->as.pm;
+  NodeType node_a_type = dst->type;
+  Primitive node_a_value = dst->as.pm;
 
   ir_exec(dst, src->as.bp.r_arg);
-  enum NodeType node_b_type = dst->type;
-  union Primitive node_b_value = dst->as.pm;
+  NodeType node_b_type = dst->type;
+  Primitive node_b_value = dst->as.pm;
 
   if (node_a_type == NT_PRIM_FLT && node_b_type == NT_PRIM_INT)
     IR_PM_CONVERT(b, n_int, n_flt, NT_PRIM_FLT)
@@ -1192,7 +1177,7 @@ enum IR_ERR ir_biop_exec(struct Node *dst, struct Node *src) {
   return IR_ERR_NOERROR;
 }
 
-enum IR_ERR ir_exec(struct Node *dst, struct Node *src) {
+IR_ERR ir_exec(Node *dst, Node *src) {
   switch (src->type) {
   case NT_PRIM_SYM:
   case NT_PRIM_INT:
@@ -1238,9 +1223,9 @@ enum IR_ERR ir_exec(struct Node *dst, struct Node *src) {
 //    | |_| \__ \  __/ |
 //     \__,_|___/\___|_|
 
-_Noreturn void repl(struct Parser *pr) {
-  struct Node source, result;
-  struct Node *source_p, *result_p;
+_Noreturn void repl(Parser *pr) {
+  Node source, result;
+  Node *source_p, *result_p;
 
 #ifdef _READLINE_H_
   using_history();
@@ -1281,7 +1266,7 @@ _Noreturn void repl(struct Parser *pr) {
     pr->lx.rd.page.len = (size_t)line_len;
 #endif
 
-    enum PR_ERR perr = pr_next_node(pr, &source_p);
+    PR_ERR perr = pr_next_node(pr, &source_p);
     if (perr != PR_ERR_NOERROR) {
       ERROR("%zu:%zu: " CLR_INTERNAL "%s" CLR_RESET
             " (%d) [token: " CLR_INTERNAL "%s" CLR_RESET " (%d)]\n",
@@ -1296,7 +1281,7 @@ _Noreturn void repl(struct Parser *pr) {
                   SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-    enum IR_ERR ierr = ir_exec(result_p, source_p);
+    IR_ERR ierr = ir_exec(result_p, source_p);
     if (ierr != IR_ERR_NOERROR) {
       ERROR(CLR_INTERNAL "%s" CLR_RESET " (%d)\n", ir_err_stringify(ierr),
             ierr);
@@ -1312,7 +1297,7 @@ _Noreturn void repl(struct Parser *pr) {
 }
 
 int main(int argc, char *argv[]) {
-  struct Parser pr = {
+  Parser pr = {
       .lx =
           {
               .rd =
@@ -1336,7 +1321,7 @@ int main(int argc, char *argv[]) {
   if (argc > 2)
     FATAL("too many arguments\n");
 
-  struct Arena principal_arena = {.head = NULL};
+  Arena principal_arena = {.head = NULL};
 
   if (argc == 2) {
     pr.lx.rd.page.len = pr.lx.rd.page.cap = strlen(argv[1]);
@@ -1351,10 +1336,10 @@ int main(int argc, char *argv[]) {
 
   rd_reset_counters(&pr.lx.rd);
 
-  struct Node *source_p = &(struct Node){0};
-  struct Node *result_p = &(struct Node){0};
+  Node *source_p = &(Node){0};
+  Node *result_p = &(Node){0};
 
-  enum PR_ERR perr = pr_next_node(&pr, &source_p);
+  PR_ERR perr = pr_next_node(&pr, &source_p);
   if (perr != PR_ERR_NOERROR)
     FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", pr.lx.rd.row, pr.lx.rd.col,
           pr_err_stringify(perr), perr, tt_stringify(pr.lx.tt), pr.lx.tt);
@@ -1364,7 +1349,7 @@ int main(int argc, char *argv[]) {
                 SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-  enum IR_ERR ierr = ir_exec(result_p, source_p);
+  IR_ERR ierr = ir_exec(result_p, source_p);
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
