@@ -101,17 +101,19 @@
     break;
 
 //=:util:ascii
-inline bool is_whitespace(char c) {
+static inline bool is_whitespace(char c) {
   return c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n';
 }
 
-inline bool is_lower(char c) { return c >= 'a' && c <= 'z'; }
+static inline bool is_lower(char c) { return c >= 'a' && c <= 'z'; }
 
-inline bool is_upper(char c) { return c >= 'A' && c <= 'Z'; }
+static inline bool is_upper(char c) { return c >= 'A' && c <= 'Z'; }
 
-inline bool is_letter(char c) { return is_lower(c) || is_upper(c) || c == '_'; }
+static inline bool is_letter(char c) {
+  return is_lower(c) || is_upper(c) || c == '_';
+}
 
-inline bool is_digit(char c) { return c >= '0' && c <= '9'; }
+static inline bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
 //=:util:data_structures
 typedef struct {
