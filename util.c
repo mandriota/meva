@@ -162,24 +162,26 @@ flt_t fac_flt(flt_t base, flt_t step) {
 }
 
 bol_t is_almost_equal_flt(flt_t x, flt_t y) {
+  if (x == y)
+    return true;
+  if (isnan(x) || isinf(x) || isnan(y) || isinf(y))
+    return false;
+
   IEEE754_flt_t x_ieee754 = {.lit = x};
   IEEE754_flt_t y_ieee754 = {.lit = y};
 
-  if (x == y)
-    return true;
   if (x < MAX_DIFF_ULPS_FROM || y < MAX_DIFF_ULPS_FROM)
     return fabsl(x - y) < MAX_DIFF_ABS;
-	if (x_ieee754.sign != y_ieee754.sign)
+  if (x_ieee754.sign != y_ieee754.sign ||
+      llabs((int64_t)x_ieee754.expo - (int64_t)y_ieee754.expo) > 1)
     return false;
-  if (llabs((int64_t)x_ieee754.expo - (int64_t)y_ieee754.expo) > 1)
-    return false;
-	
+
   if (x_ieee754.expo > y_ieee754.expo) {
     y_ieee754.mant += MAX_DIFF_ULPS * 2;
     return y_ieee754.mant - x_ieee754.mant <= MAX_DIFF_ULPS;
   } else if (x_ieee754.expo < y_ieee754.expo) {
     x_ieee754.mant += MAX_DIFF_ULPS * 2;
-    return y_ieee754.mant - x_ieee754.mant <= MAX_DIFF_ULPS;
+    return x_ieee754.mant - y_ieee754.mant <= MAX_DIFF_ULPS;
   }
 
   return llabs((int64_t)x_ieee754.mant - (int64_t)y_ieee754.mant) <
