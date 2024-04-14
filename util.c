@@ -184,7 +184,7 @@ bol_t is_almost_equal_flt(flt_t x, flt_t y) {
     return x_ieee754.mant - y_ieee754.mant <= MAX_DIFF_ULPS;
   }
 
-  return llabs((int64_t)x_ieee754.mant - (int64_t)y_ieee754.mant) <
+  return llabs((int64_t)x_ieee754.mant - (int64_t)y_ieee754.mant) <=
          MAX_DIFF_ULPS;
 }
 
