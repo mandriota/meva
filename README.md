@@ -22,6 +22,7 @@ sudo ln -n ./bin/mewa /usr/local/bin
 - [ ] REPL: multiline input
 - [x] REPL: history
 - [x] REPL: escape handling
+- [ ] Calculation of maximal relative error
 
 ## Naming Conventions
 ### Constants, Enums, Defines

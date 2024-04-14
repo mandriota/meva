@@ -95,7 +95,7 @@
 #define REPL_RESULT_SUFFIX "\n"
 
 //=:config:math
-#define MAX_DIFF_ULPS (16)
+#define MAX_DIFF_ULPS (4096)
 
 #define MAX_DIFF_ULPS_FROM (1)
 

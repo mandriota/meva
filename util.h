@@ -23,11 +23,9 @@
 
 #include "config.h"
 
-#include <assert.h>
 #include <complex.h>
 #include <limits.h>
 #include <stdbool.h> // IWYU pragma: keep
-#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -44,7 +44,6 @@
 
 #include <complex.h>
 #include <stdbool.h> // IWYU pragma: keep
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
