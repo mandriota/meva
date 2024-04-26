@@ -23,12 +23,12 @@ ifeq ($(OS),Windows_NT)
 	EXEC := $(EXEC).exe
 endif
 
-build: mewa.c arena.c util.c
+build: mewa.c util.c
 	@echo "BUILDING EXECUTABLE"
 
 	@[ -d "./bin" ] || mkdir bin
 
-	$(CC) $(CFLAGS) $(WARNINGS) -o bin/$(EXEC) mewa.c arena.c util.c $(LIBS)
+	$(CC) $(CFLAGS) $(WARNINGS) -o bin/$(EXEC) mewa.c util.c $(LIBS)
 
 run: build
 	@echo "RUNNING EXECUTABLE"
