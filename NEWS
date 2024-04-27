@@ -1,0 +1,4 @@
+26.04.2024 ---
+  A huge optimization was made that speed up the code by a lot of times:
+  Instead of using chunk allocator, Mewa now just allocates as much
+  virtual memory as it can and than just uses it!
