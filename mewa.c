@@ -40,6 +40,7 @@
 
 #include "util.h"
 
+#include <assert.h>
 #include <complex.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
@@ -1309,6 +1310,8 @@ _Noreturn void repl(Interpreter *ir) {
 int main(int argc, char *argv[]) {
   Interpreter ir;
   ir.pr = malloc(sizeof(Parser) + NODE_BUF_SIZE * sizeof(Node));
+  assert(ir.pr != NULL && "allocation failed");
+
   ir.pr->lx.rd.src = NULL;
   ir.pr->lx.rd.page.data = NULL;
   ir.pr->lx.rd.page.len = 0;
@@ -1332,6 +1335,7 @@ int main(int argc, char *argv[]) {
 
     ir.pr->lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
     ir.pr->lx.rd.page.data = (char *)malloc(ir.pr->lx.rd.page.cap);
+    assert(ir.pr->lx.rd.page.data != NULL && "allocation failed");
   }
 
   rd_reset_counters(&ir.pr->lx.rd);
@@ -1359,7 +1363,8 @@ int main(int argc, char *argv[]) {
 
   printf(PIPE_RESULT_SUFFIX);
 
-  free(ir.pr->lx.rd.page.data);
+  if (ir.pr->lx.rd.src != NULL)
+    free(ir.pr->lx.rd.page.data);
   free(ir.pr);
 
   return EXIT_SUCCESS;
