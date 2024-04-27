@@ -68,11 +68,12 @@ when no command line arguments are passed
 #endif
 
 //=:config:invariant
-#if INTERNAL_READING_BUF_SIZE < 1
-#error INTERNAL_READING_BUF_SIZE must be at least 1
-#endif
+_Static_assert(MAX_DIFF_ABS >= 0, "MAX_DIFF_ABS must be a positive number");
 
-#undef NDEBUG
+_Static_assert(INTERNAL_READING_BUF_SIZE > 0,
+               "INTERNAL_READING_BUF_SIZE must be at least 1");
+
+_Static_assert(NODE_BUF_SIZE > 0, "NODE_BUF_SIZE must be at least 1");
 
 //=:reader
 //                        _
@@ -578,7 +579,8 @@ NodeOffset pr_nd_alloc(Parser *pr) {
   return pr->len - 1;
 }
 
-void nd_tree_print(Node nodes[], NodeOffset node, int depth, int depth_max) {
+void nd_tree_print(Node nodes[], NodeOffset node, unsigned depth,
+                   unsigned depth_max) {
   if (depth >= depth_max)
     return;
 
