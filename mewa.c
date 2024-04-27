@@ -491,16 +491,16 @@ const char *nt_stringify(NodeType nt) {
   return STRINGIFY(INVALID_NT);
 }
 
-typedef uint32_t NodeOffset;
+typedef uint32_t NodeIndex;
 
 typedef struct Node Node; // IWYU pragma: keep
 
 typedef struct {
-  NodeOffset arg;
+  NodeIndex arg;
 } UnOp;
 
 typedef struct {
-  NodeOffset l_arg, r_arg;
+  NodeIndex l_arg, r_arg;
 } BiOp;
 
 struct Node {
@@ -566,12 +566,12 @@ typedef struct {
   ssize_t p0c;
   bool abs;
 
-  NodeOffset len;
-  NodeOffset cap;
+  NodeIndex len;
+  NodeIndex cap;
   Node nodes[];
 } Parser;
 
-NodeOffset pr_nd_alloc(Parser *pr) {
+NodeIndex pr_nd_alloc(Parser *pr) {
   if (pr->len + 1 >= pr->cap)
     FATAL("not enough memory");
 
@@ -579,7 +579,7 @@ NodeOffset pr_nd_alloc(Parser *pr) {
   return pr->len - 1;
 }
 
-void nd_tree_print(Node nodes[], NodeOffset node, unsigned depth,
+void nd_tree_print(Node nodes[], NodeIndex node, unsigned depth,
                    unsigned depth_max) {
   if (depth >= depth_max)
     return;
@@ -692,9 +692,9 @@ const char *pr_err_stringify(PR_ERR pr_err) {
   return STRINGIFY(INVALID_PR_ERR);
 }
 
-PR_ERR pr_call(Parser *pr, NodeOffset *node, Priority pt);
+PR_ERR pr_call(Parser *pr, NodeIndex *node, Priority pt);
 
-PR_ERR pr_next_prim_node(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_prim_node(Parser *pr, NodeIndex *node, Priority pt) {
   switch (pr->lx.tt) {
   case TT_ILL:
     return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
@@ -749,7 +749,7 @@ PR_ERR pr_next_prim_node(Parser *pr, NodeOffset *node, Priority pt) {
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_next_unop_node(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_unop_node(Parser *pr, NodeIndex *node, Priority pt) {
   if (pt_includes_tt(pt, pr->lx.tt)) {
     pr->nodes[*node].type = NT_UNOP_NOT * (pr->lx.tt == TT_NOT) +
                             NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
@@ -765,10 +765,10 @@ PR_ERR pr_next_unop_node(Parser *pr, NodeOffset *node, Priority pt) {
   return pr_call(pr, node, pt);
 }
 
-PR_ERR pr_next_biop_node(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_biop_node(Parser *pr, NodeIndex *node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
-  NodeOffset node_tmp;
+  NodeIndex node_tmp;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
     node_tmp = pr_nd_alloc(pr);
@@ -786,10 +786,10 @@ PR_ERR pr_next_biop_node(Parser *pr, NodeOffset *node, Priority pt) {
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_next_biop_fact_node(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_biop_fact_node(Parser *pr, NodeIndex *node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
-  NodeOffset node_tmp, r_arg;
+  NodeIndex node_tmp, r_arg;
 
   if (pt_includes_tt(pt, pr->lx.tt)) {
     node_tmp = pr_nd_alloc(pr);
@@ -807,7 +807,7 @@ PR_ERR pr_next_biop_fact_node(Parser *pr, NodeOffset *node, Priority pt) {
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_skip_rp0(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_skip_rp0(Parser *pr, NodeIndex *node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
   if (pr->lx.tt == TT_RP0) {
@@ -823,14 +823,14 @@ PR_ERR pr_skip_rp0(Parser *pr, NodeOffset *node, Priority pt) {
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_next_node(Parser *pr, NodeOffset *node) {
+PR_ERR pr_next_node(Parser *pr, NodeIndex *node) {
   lx_next_token(&pr->lx);
   TRY(PR_ERR, pr_call(pr, node, 0));
 
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_call(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_call(Parser *pr, NodeIndex *node, Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
     return pr_next_biop_node(pr, node, PT_LET0);
@@ -901,7 +901,7 @@ const char *ir_err_stringify(IR_ERR ir_err) {
   return STRINGIFY(INVALID_IR_ERR);
 }
 
-IR_ERR ir_exec(Interpreter *ir, NodeOffset src);
+IR_ERR ir_exec(Interpreter *ir, NodeIndex src);
 
 IR_ERR ir_unop_exec_n_int(Interpreter *ir, NodeType op, Primitive a) {
   ir->nodes[0].type = NT_PRIM_INT;
@@ -961,7 +961,7 @@ IR_ERR ir_unop_exec_n_bol(Interpreter *ir, NodeType op, Primitive a) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_unop_exec(Interpreter *ir, NodeOffset src) {
+IR_ERR ir_unop_exec(Interpreter *ir, NodeIndex src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.up.arg));
   NodeType node_a_type = ir->nodes[0].type;
   Primitive node_a_value = ir->nodes[0].as.pm;
@@ -1150,7 +1150,7 @@ IR_ERR ir_biop_exec_n_bol(Interpreter *ir, NodeType op, Primitive a,
     node_##name##_value.to = node_##name##_value.from;                         \
   }
 
-IR_ERR ir_biop_exec(Interpreter *ir, NodeOffset src) {
+IR_ERR ir_biop_exec(Interpreter *ir, NodeIndex src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.l_arg));
   NodeType node_a_type = ir->nodes[0].type;
   Primitive node_a_value = ir->nodes[0].as.pm;
@@ -1195,7 +1195,7 @@ IR_ERR ir_biop_exec(Interpreter *ir, NodeOffset src) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_exec(Interpreter *ir, NodeOffset src) {
+IR_ERR ir_exec(Interpreter *ir, NodeIndex src) {
   switch (ir->pr->nodes[src].type) {
   case NT_PRIM_SYM:
   case NT_PRIM_INT:
@@ -1242,7 +1242,7 @@ IR_ERR ir_exec(Interpreter *ir, NodeOffset src) {
 //     \__,_|___/\___|_|
 
 _Noreturn void repl(Interpreter *ir) {
-  NodeOffset source = 0;
+  NodeIndex source = 0;
 
 #ifdef _READLINE_H_
   using_history();
@@ -1342,7 +1342,7 @@ int main(int argc, char *argv[]) {
 
   rd_reset_counters(&ir.pr->lx.rd);
 
-  NodeOffset source = 0;
+  NodeIndex source = 0;
 
   PR_ERR perr = pr_next_node(ir.pr, &source);
   if (perr != PR_ERR_NOERROR)
