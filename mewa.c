@@ -89,17 +89,14 @@ typedef struct {
   FILE *src;
 
   size_t ptr;
-  ssize_t row;
-  ssize_t col;
   ssize_t mrk;
+  size_t row, col;
 
   char cc;
 
+  bool eof, eos;
+	bool eoi;
   bool prv;
-
-  bool eof;
-  bool eos;
-  bool eoi;
 } Reader;
 
 void rd_reset_counters(Reader *rd) {
