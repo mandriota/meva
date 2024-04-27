@@ -691,7 +691,7 @@ const char *pr_err_stringify(PR_ERR pr_err) {
 
 PR_ERR pr_call(Parser *pr, NodeOffset *node, Priority pt);
 
-PR_ERR pr_next_primitive_node(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_prim_node(Parser *pr, NodeOffset *node, Priority pt) {
   switch (pr->lx.tt) {
   case TT_ILL:
     return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
@@ -746,7 +746,7 @@ PR_ERR pr_next_primitive_node(Parser *pr, NodeOffset *node, Priority pt) {
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_unop_next_node(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_unop_node(Parser *pr, NodeOffset *node, Priority pt) {
   if (pt_includes_tt(pt, pr->lx.tt)) {
     pr->nodes[*node].type = NT_UNOP_NOT * (pr->lx.tt == TT_NOT) +
                             NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
@@ -762,43 +762,43 @@ PR_ERR pr_unop_next_node(Parser *pr, NodeOffset *node, Priority pt) {
   return pr_call(pr, node, pt);
 }
 
-PR_ERR pr_biop_next_node(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_biop_node(Parser *pr, NodeOffset *node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
-  NodeOffset node_p;
+  NodeOffset node_tmp;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
-    node_p = pr_nd_alloc(pr);
-    pr->nodes[node_p].type = (NodeType)pr->lx.tt;
-    pr->nodes[node_p].as.bp.l_arg = *node;
-    pr->nodes[node_p].as.bp.r_arg = pr_nd_alloc(pr);
+    node_tmp = pr_nd_alloc(pr);
+    pr->nodes[node_tmp].type = (NodeType)pr->lx.tt;
+    pr->nodes[node_tmp].as.bp.l_arg = *node;
+    pr->nodes[node_tmp].as.bp.r_arg = pr_nd_alloc(pr);
 
     lx_next_token(&pr->lx);
     TRY(PR_ERR,
-        pr_call(pr, &pr->nodes[node_p].as.bp.r_arg, pt + pt_rl_biop(pt)));
+        pr_call(pr, &pr->nodes[node_tmp].as.bp.r_arg, pt + pt_rl_biop(pt)));
 
-    *node = node_p;
+    *node = node_tmp;
   }
 
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_biop_next_node_fac(Parser *pr, NodeOffset *node, Priority pt) {
+PR_ERR pr_next_biop_fact_node(Parser *pr, NodeOffset *node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
-  NodeOffset node_p, r_arg;
+  NodeOffset node_tmp, r_arg;
 
   if (pt_includes_tt(pt, pr->lx.tt)) {
-    node_p = pr_nd_alloc(pr);
-    pr->nodes[node_p].type = NT_BIOP_FAC;
-    pr->nodes[node_p].as.bp.l_arg = *node;
+    node_tmp = pr_nd_alloc(pr);
+    pr->nodes[node_tmp].type = NT_BIOP_FAC;
+    pr->nodes[node_tmp].as.bp.l_arg = *node;
 
-    r_arg = pr->nodes[node_p].as.bp.r_arg = pr_nd_alloc(pr);
+    r_arg = pr->nodes[node_tmp].as.bp.r_arg = pr_nd_alloc(pr);
     pr->nodes[r_arg].type = NT_PRIM_INT;
     pr->nodes[r_arg].as.pm.n_int = pr->lx.pm.n_int;
     lx_next_token(&pr->lx);
 
-    *node = node_p;
+    *node = node_tmp;
   }
 
   return PR_ERR_NOERROR;
@@ -830,29 +830,29 @@ PR_ERR pr_next_node(Parser *pr, NodeOffset *node) {
 PR_ERR pr_call(Parser *pr, NodeOffset *node, Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
-    return pr_biop_next_node(pr, node, PT_LET0);
+    return pr_next_biop_node(pr, node, PT_LET0);
   case PT_LET0:
-    return pr_biop_next_node(pr, node, PT_ORR);
+    return pr_next_biop_node(pr, node, PT_ORR);
   case PT_LET1:
-    return pr_biop_next_node(pr, node, PT_LET0);
+    return pr_next_biop_node(pr, node, PT_LET0);
   case PT_ORR:
-    return pr_biop_next_node(pr, node, PT_AND);
+    return pr_next_biop_node(pr, node, PT_AND);
   case PT_AND:
-    return pr_biop_next_node(pr, node, PT_CMP);
+    return pr_next_biop_node(pr, node, PT_CMP);
   case PT_CMP:
-    return pr_biop_next_node(pr, node, PT_ADD_SUB);
+    return pr_next_biop_node(pr, node, PT_ADD_SUB);
   case PT_ADD_SUB:
-    return pr_biop_next_node(pr, node, PT_MUL_QUO_MOD);
+    return pr_next_biop_node(pr, node, PT_MUL_QUO_MOD);
   case PT_MUL_QUO_MOD:
-    return pr_unop_next_node(pr, node, PT_NOT_NOP_NEG);
+    return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
   case PT_NOT_NOP_NEG:
-    return pr_biop_next_node(pr, node, PT_POW0);
+    return pr_next_biop_node(pr, node, PT_POW0);
   case PT_POW0:
-    return pr_biop_next_node_fac(pr, node, PT_FAC);
+    return pr_next_biop_fact_node(pr, node, PT_FAC);
   case PT_POW1:
-    return pr_unop_next_node(pr, node, PT_NOT_NOP_NEG);
+    return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
   case PT_FAC:
-    return pr_next_primitive_node(pr, node, PT_PRIM);
+    return pr_next_prim_node(pr, node, PT_PRIM);
   case PT_PRIM:
     return pr_skip_rp0(pr, node, PT_SKIP_RP0);
   }
@@ -1273,7 +1273,7 @@ _Noreturn void repl(Interpreter *ir) {
     if (line_len == -1)
       FATAL("cannot read line\n");
 
-    pr->lx.rd.page.len = (size_t)line_len;
+    ir->pr->lx.rd.page.len = (size_t)line_len;
 #endif
 
     PR_ERR perr = pr_next_node(ir->pr, &source);
