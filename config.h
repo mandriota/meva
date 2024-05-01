@@ -34,7 +34,7 @@
 
 //=:config:colors
 // uncomment to disable colors
-#define NCOLORS
+// #define NCOLORS
 
 #define ESC "\x1b"
 
@@ -72,13 +72,13 @@
 #define SOURCE_INDENTATION (0)
 
 // source tree max depth
-#define SOURCE_MAX_DEPTH (100)
+#define SOURCE_MAX_DEPTH (50)
 
 // result tree indentation
 #define RESULT_INDENTATION (1)
 
 // result tree max depth
-#define RESULT_MAX_DEPTH (100)
+#define RESULT_MAX_DEPTH (50)
 
 //=:config:pipe
 #define PIPE_RESULT_PREFIX "= "

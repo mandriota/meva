@@ -19,6 +19,10 @@ else
 	CFLAGS += -DNDEBUG -O2
 endif
 
+ifeq ($(COLOR),0)
+	CFLAGS += -DNCOLORS
+endif
+
 ifeq ($(OS),Windows_NT)
 	EXEC := $(EXEC).exe
 endif

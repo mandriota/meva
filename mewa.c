@@ -41,7 +41,6 @@
 #include "util.h"
 
 #include <assert.h>
-#include <complex.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
 #include <stdio.h>
@@ -95,7 +94,7 @@ typedef struct {
   char cc;
 
   bool eof, eos;
-	bool eoi;
+  bool eoi;
   bool prv;
 } Reader;
 
@@ -510,6 +509,117 @@ struct Node {
   } as;
 };
 
+typedef struct {
+  NodeIndex node;
+  NodeIndex depth;
+} StackEmuEl_nd_tree_print;
+
+void nd_tree_print_cmx(cmx_t cmx) {
+  if (creal(cmx) != 0 && cimag(cmx) != 0) {
+    printf(CLR_PRIM "%Lf %Lfi\n" CLR_RESET, creal(cmx), cimag(cmx));
+  } else if (creal(cmx) == 0 && cimag(cmx) == 0) {
+    printf(CLR_PRIM "0\n" CLR_RESET);
+  } else if (creal(cmx) != 0) {
+    printf(CLR_PRIM "%Lf\n" CLR_RESET, creal(cmx));
+  } else if (cimag(cmx) != 0)
+    printf(CLR_PRIM "%Lfi\n" CLR_RESET, cimag(cmx));
+}
+
+void nd_tree_print(StackEmuEl_nd_tree_print stack_emu[], Node nodes[],
+                   NodeIndex node, NodeIndex depth, NodeIndex depth_max) {
+  NodeIndex len = 1;
+
+  char dst[48];
+  char *ptr;
+  int ptr_off;
+
+  NodeIndex node_tmp;
+
+  do {
+    while (depth < depth_max) {
+      printf("%*s", depth * 2, "");
+#ifndef NDEBUG
+      printf(CLR_INTERNAL "%s" CLR_RESET " (%d) ",
+             nt_stringify(nodes[node].type), nodes[node].type);
+#endif
+
+      switch (nodes[node].type) {
+      case NT_PRIM_SYM:
+        ptr = decode_symbol(dst, &dst[sizeof dst - 1], nodes[node].as.pm.n_unt);
+        ptr_off = ptr - dst;
+        printf(CLR_PRIM "%.*s" CLR_RESET "\n", ptr_off, dst);
+        goto while2_final;
+      case NT_PRIM_INT:
+        ptr = int_stringify(dst, &dst[sizeof dst - 1], nodes[node].as.pm.n_int);
+        ptr_off = &dst[sizeof dst] - ptr;
+        printf(CLR_PRIM "%.*s" CLR_RESET "\n", ptr_off, ptr);
+        goto while2_final;
+      case NT_PRIM_FLT:
+        printf(CLR_PRIM "%Lf\n" CLR_RESET, nodes[node].as.pm.n_flt);
+        goto while2_final;
+      case NT_PRIM_CMX:
+        nd_tree_print_cmx(nodes[node].as.pm.n_cmx);
+        goto while2_final;
+      case NT_PRIM_BOL:
+        if (nodes[node].as.pm.n_bol)
+          printf(CLR_PRIM "true\n" CLR_RESET);
+        else
+          printf(CLR_PRIM "false\n" CLR_RESET);
+        goto while2_final;
+      case NT_BIOP_LET:
+      case NT_BIOP_AND:
+      case NT_BIOP_ORR:
+      case NT_BIOP_GRE:
+      case NT_BIOP_LES:
+      case NT_BIOP_GEQ:
+      case NT_BIOP_LEQ:
+      case NT_BIOP_EQU:
+      case NT_BIOP_NEQ:
+      case NT_BIOP_ADD:
+      case NT_BIOP_SUB:
+      case NT_BIOP_MUL:
+      case NT_BIOP_QUO:
+      case NT_BIOP_MOD:
+      case NT_BIOP_POW:
+      case NT_BIOP_FAC:
+        printf("\n");
+        node_tmp = node;
+        node = nodes[node_tmp].as.bp.l_arg;
+        ++depth;
+        stack_emu[len].node = nodes[node_tmp].as.bp.r_arg;
+        stack_emu[len].depth = depth;
+        ++len;
+        continue;
+      case NT_UNOP_ABS:
+      case NT_UNOP_NOT:
+      case NT_UNOP_NEG:
+      case NT_UNOP_NOP:
+        printf("\n");
+        node = nodes[node].as.up.arg;
+        ++depth;
+        continue;
+      case NT_FUNC:
+      case NT_CALL:
+      case NT_CALL_ANON:
+        FATAL("currently not implimented\n");
+      }
+    }
+
+    printf("%*s...\n", depth * 2, "");
+
+  while2_final:
+    --len;
+    node = stack_emu[len].node;
+    depth = stack_emu[len].depth;
+  } while (len != 0);
+}
+
+#define nd_tree_print(nodes, node, depth, depth_max)                           \
+  {                                                                            \
+    StackEmuEl_nd_tree_print stack_emu[depth_max - depth + 1];                 \
+    nd_tree_print(stack_emu, nodes, node, depth, depth_max);                   \
+  }
+
 //=:parser:priority
 typedef enum {
   PT_SKIP_RP0,
@@ -574,89 +684,6 @@ NodeIndex pr_nd_alloc(Parser *pr) {
 
   ++pr->len;
   return pr->len - 1;
-}
-
-void nd_tree_print(Node nodes[], NodeIndex node, unsigned depth,
-                   unsigned depth_max) {
-  if (depth >= depth_max)
-    return;
-
-  static char dst[48];
-  char *str;
-
-  printf("%*s", depth * 2, ""); // indentation
-#ifndef NDEBUG
-  printf(CLR_INTERNAL "%s" CLR_RESET " (%d) ", nt_stringify(nodes[node].type),
-         nodes[node].type);
-#endif
-
-  switch (nodes[node].type) {
-  case NT_PRIM_SYM:
-    str = decode_symbol(dst, &dst[sizeof dst - 1], nodes[node].as.pm.n_unt);
-    *str = 0;
-    printf(CLR_PRIM "%s" CLR_RESET "\n", dst);
-    return;
-  case NT_PRIM_INT:
-    dst[sizeof dst - 1] = 0;
-
-    str = int_stringify(dst, &dst[sizeof dst - 2], nodes[node].as.pm.n_int);
-    printf(CLR_PRIM "%s" CLR_RESET "\n", str);
-    return;
-  case NT_PRIM_FLT:
-    printf(CLR_PRIM "%Lf\n" CLR_RESET, nodes[node].as.pm.n_flt);
-    return;
-  case NT_PRIM_CMX:
-    if (creal(nodes[node].as.pm.n_cmx) != 0 &&
-        cimag(nodes[node].as.pm.n_cmx) != 0) {
-      printf(CLR_PRIM "%Lf %Lfi\n" CLR_RESET, creal(nodes[node].as.pm.n_cmx),
-             cimag(nodes[node].as.pm.n_cmx));
-    } else if (creal(nodes[node].as.pm.n_cmx) == 0 &&
-               cimag(nodes[node].as.pm.n_cmx) == 0) {
-      printf(CLR_PRIM "0\n" CLR_RESET);
-    } else if (creal(nodes[node].as.pm.n_cmx) != 0) {
-      printf(CLR_PRIM "%Lf\n" CLR_RESET, creal(nodes[node].as.pm.n_cmx));
-    } else if (cimag(nodes[node].as.pm.n_cmx) != 0)
-      printf(CLR_PRIM "%Lfi\n" CLR_RESET, cimag(nodes[node].as.pm.n_cmx));
-
-    return;
-  case NT_PRIM_BOL:
-    if (nodes[node].as.pm.n_bol)
-      printf(CLR_PRIM "true\n" CLR_RESET);
-    else
-      printf(CLR_PRIM "false\n" CLR_RESET);
-    return;
-  case NT_BIOP_LET:
-  case NT_BIOP_AND:
-  case NT_BIOP_ORR:
-  case NT_BIOP_GRE:
-  case NT_BIOP_LES:
-  case NT_BIOP_GEQ:
-  case NT_BIOP_LEQ:
-  case NT_BIOP_EQU:
-  case NT_BIOP_NEQ:
-  case NT_BIOP_ADD:
-  case NT_BIOP_SUB:
-  case NT_BIOP_MUL:
-  case NT_BIOP_QUO:
-  case NT_BIOP_MOD:
-  case NT_BIOP_POW:
-  case NT_BIOP_FAC:
-    printf("\n");
-    nd_tree_print(nodes, nodes[node].as.bp.l_arg, depth + 1, depth_max);
-    nd_tree_print(nodes, nodes[node].as.bp.r_arg, depth + 1, depth_max);
-    return;
-  case NT_UNOP_ABS:
-  case NT_UNOP_NOT:
-  case NT_UNOP_NEG:
-  case NT_UNOP_NOP:
-    printf("\n");
-    nd_tree_print(nodes, nodes[node].as.up.arg, depth + 1, depth_max);
-    return;
-  case NT_FUNC:
-  case NT_CALL:
-  case NT_CALL_ANON:
-    FATAL("currently not implimented\n");
-  }
 }
 
 typedef enum {
@@ -1333,7 +1360,8 @@ int main(int argc, char *argv[]) {
     ir.pr->lx.rd.src = stdin;
 
     ir.pr->lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
-    ir.pr->lx.rd.page.data = (char *)malloc(ir.pr->lx.rd.page.cap);
+    ir.pr->lx.rd.page.data =
+        (char *)malloc(ir.pr->lx.rd.page.cap * sizeof(char));
     assert(ir.pr->lx.rd.page.data != NULL && "allocation failed");
   }
 
