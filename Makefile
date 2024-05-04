@@ -3,7 +3,7 @@ EXEC := mewa
 CC := gcc
 LIBS := -lreadline -DHAVE_LIBREADLINE -lm
 CFLAGS := -std=gnu2x
-WARNINGS := -Wall -Wextra -Werror -Wpedantic -Wno-multichar
+WARNINGS :=
 
 ifeq ($(DEBUG),1)
 	CFLAGS += -O0

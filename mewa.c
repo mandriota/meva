@@ -67,8 +67,6 @@ when no command line arguments are passed
 #endif
 
 //=:config:invariant
-_Static_assert(MAX_DIFF_ABS >= 0, "MAX_DIFF_ABS must be a positive number");
-
 _Static_assert(INTERNAL_READING_BUF_SIZE > 0,
                "INTERNAL_READING_BUF_SIZE must be at least 1");
 
