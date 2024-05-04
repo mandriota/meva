@@ -3,17 +3,17 @@ EXEC := mewa
 CC := gcc
 LIBS := -lreadline -DHAVE_LIBREADLINE -lm
 CFLAGS := -std=gnu2x
-WARNINGS :=
+WARNINGS := -Wall -Wextra -Wpedantic -Wno-multichar -Wformat-security
 
 ifeq ($(DEBUG),1)
+	WARNINGS += -Werror
+
 	CFLAGS += -O0
 	ifeq ($(CC),clang)
 		CFLAGS += -fsanitize=address -fsanitize=undefined            \
 		-fno-sanitize-recover=all -fsanitize=float-divide-by-zero    \
 		-fsanitize=float-cast-overflow -fno-sanitize=null            \
 		-fno-sanitize=alignment -g
-	else
-		@echo "SANITIZER IS NOT SUPPORTED BY COMPILER"
 	endif
 else
 	CFLAGS += -DNDEBUG -O2

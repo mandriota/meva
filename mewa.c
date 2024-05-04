@@ -523,7 +523,7 @@ void nd_tree_print_cmx(cmx_t cmx) {
     printf(CLR_PRIM "%Lfi\n" CLR_RESET, cimag(cmx));
 }
 
-void nd_tree_print(StackEmuEl_nd_tree_print stack_emu[], Node nodes[],
+void nd_tree_print(StackEmuEl_nd_tree_print stack_emu[], Node nodes[static 1],
                    NodeIndex node, NodeIndex depth, NodeIndex depth_max) {
   NodeIndex len = 1;
 
