@@ -965,7 +965,7 @@ IR_ERR ir_unop_exec_n_cmx(Interpreter *ir, NodeType op, Primitive a) {
     EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.n_cmx = -a.n_cmx)
   case NT_UNOP_ABS:
     ir->nodes[0].type = NT_PRIM_FLT;
-    ir->nodes[0].as.pm.n_flt = cabs(a.n_cmx);
+    ir->nodes[0].as.pm.n_flt = fabs(a.n_cmx);
     break;
   default:
     return IR_ERR_ILL_NT;
