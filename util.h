@@ -184,15 +184,15 @@ typedef union {
   flt_t lit;
 #ifdef USE_BIG_ENDIAN
   struct {
-    uint64_t mant : LDBL_MANT_DIG - 1;
-    uint64_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
-    uint64_t sign : 1;
+    unt_t mant : LDBL_MANT_DIG - 1;
+    unt_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
+    unt_t sign : 1;
   };
 #else
   struct {
-    uint64_t sign : 1;
-    uint64_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
-    uint64_t mant : LDBL_MANT_DIG - 1;
+    unt_t sign : 1;
+    unt_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
+    unt_t mant : LDBL_MANT_DIG - 1;
   };
 #endif
 } IEEE754_flt_t;

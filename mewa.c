@@ -41,6 +41,7 @@
 #include "util.h"
 
 #include <assert.h>
+#include <complex.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
 #include <stdio.h>
@@ -349,10 +350,11 @@ void lx_next_token_factorial(Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-#define LX_TRY_C(c, token_type)                                                \
+#define LX_TRY_C(c, token_type, ...)                                           \
   {                                                                            \
     if (lx->rd.cc == c) {                                                      \
       lx->tt = token_type;                                                     \
+      __VA_ARGS__;                                                             \
       return;                                                                  \
     }                                                                          \
   }
@@ -385,15 +387,16 @@ void lx_next_token(Lexer *lx) {
     EXEC_CASE(';', lx->tt = TT_EOX)
     EXEC_CASE('\0', lx->tt = TT_EOS)
     EXEC_CASE('!', lx_next_token_factorial(lx))
-    EXEC_CASE('&', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('&', TT_AND)))
-    EXEC_CASE('|', LX_CONSUME_C_OR_RET_TT(TT_ABS, LX_TRY_C('|', TT_ORR)))
-    EXEC_CASE('>', LX_CONSUME_C_OR_RET_TT(TT_GRE, LX_TRY_C('=', TT_GEQ)))
-    EXEC_CASE('<', LX_CONSUME_C_OR_RET_TT(TT_LES, LX_TRY_C('=', TT_LEQ)))
-    EXEC_CASE('=', LX_CONSUME_C_OR_RET_TT(TT_LET, LX_TRY_C('=', TT_EQU)))
-    EXEC_CASE('\'', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('f', TT_FAL)
-                                                       LX_TRY_C('t', TT_TRU)))
+    EXEC_CASE('&', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('&', TT_AND, )))
+    EXEC_CASE('|', LX_CONSUME_C_OR_RET_TT(TT_ABS, LX_TRY_C('|', TT_ORR, )))
+    EXEC_CASE('>', LX_CONSUME_C_OR_RET_TT(TT_GRE, LX_TRY_C('=', TT_GEQ, )))
+    EXEC_CASE('<', LX_CONSUME_C_OR_RET_TT(TT_LES, LX_TRY_C('=', TT_LEQ, )))
+    EXEC_CASE('=', LX_CONSUME_C_OR_RET_TT(TT_LET, LX_TRY_C('=', TT_EQU, )))
+    EXEC_CASE('\'', LX_CONSUME_C_OR_RET_TT(
+                        TT_ILL, LX_TRY_C('f', TT_FAL, ) LX_TRY_C('t', TT_TRU, )
+                                    LX_TRY_C('i', TT_CMX, lx->pm.n_cmx = I)))
   default:
-    if (is_digit(lx->rd.cc) || lx->rd.cc == '.' || lx->rd.cc == 'i') {
+    if (is_digit(lx->rd.cc) || lx->rd.cc == '.') {
       lx_next_token_number(lx);
     } else if (is_letter(lx->rd.cc))
       lx_next_token_symbol(lx);
@@ -1336,14 +1339,22 @@ int main(int argc, char *argv[]) {
   ir.pr = malloc(sizeof(Parser) + NODE_BUF_SIZE * sizeof(Node));
   assert(ir.pr != NULL && "allocation failed");
 
-  ir.pr->lx.rd.src = NULL;
-  ir.pr->lx.rd.page.data = NULL;
-  ir.pr->lx.rd.page.len = 0;
-  ir.pr->lx.rd.page.cap = 0;
-  ir.pr->p0c = 0;
-  ir.pr->abs = false;
-  ir.pr->len = 1;
-  ir.pr->cap = NODE_BUF_SIZE;
+  *ir.pr = ((Parser){
+      .lx.rd =
+          {
+              .src = NULL,
+              .page =
+                  {
+                      .data = NULL,
+                      .len = 0,
+                      .cap = 0,
+                  },
+          },
+      .p0c = 0,
+      .abs = false,
+      .len = 1,
+      .cap = NODE_BUF_SIZE,
+  });
 
   if (isatty(STDIN_FILENO) && argc == 1)
     repl(&ir);
