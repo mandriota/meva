@@ -32,6 +32,22 @@
 //    | |_| | |_| | |
 //     \__,_|\__|_|_|
 
+ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
+  if (*lineptr == NULL || *n == 0)
+    *lineptr = (char *)malloc((*n = 16) * sizeof(char));
+
+  char cc = 0;
+  size_t cp = 0;
+  do {
+    (*lineptr)[cp] = cc = getc(stream);
+    ++cp;
+    if (cp >= *n)
+      *lineptr = (char *)realloc(*lineptr, *n *= 2);
+  } while (cc != '\n' && !ferror(stream));
+
+	return cp;
+}
+
 //=:util:memory
 size_t align(size_t sz, size_t alignment) {
   return sz + (alignment - ((sz - 1) & (alignment - 1))) - 1;
@@ -192,3 +208,4 @@ bol_t is_almost_equal_cmx(cmx_t x, cmx_t y) {
   return is_almost_equal_flt(creal(x), creal(y)) &&
          is_almost_equal_flt(cimag(x), cimag(y));
 }
+

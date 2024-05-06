@@ -98,6 +98,11 @@
     expr;                                                                      \
     break;
 
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64) || defined(WIN64)
+#include <memory.h>
+ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+#endif
+
 //=:util:ascii
 static inline bool is_whitespace(char c) {
   return c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n';
@@ -121,9 +126,9 @@ typedef struct {
 } StringBuffer;
 
 //=:util:types
-typedef long double complex cmx_t;
+typedef double complex cmx_t;
 
-typedef long double flt_t;
+typedef double flt_t;
 
 #ifdef BITINT_MAXWIDTH
 typedef _BitInt(BITINT_MAXWIDTH) int_t;
@@ -184,15 +189,15 @@ typedef union {
   flt_t lit;
 #ifdef USE_BIG_ENDIAN
   struct {
-    unt_t mant : LDBL_MANT_DIG - 1;
-    unt_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
+    unt_t mant : DBL_MANT_DIG - 1;
+    unt_t expo : sizeof(flt_t) * 8 - DBL_MANT_DIG;
     unt_t sign : 1;
   };
 #else
   struct {
     unt_t sign : 1;
-    unt_t expo : sizeof(flt_t) * 8 - LDBL_MANT_DIG;
-    unt_t mant : LDBL_MANT_DIG - 1;
+    unt_t expo : sizeof(flt_t) * 8 - DBL_MANT_DIG;
+    unt_t mant : DBL_MANT_DIG - 1;
   };
 #endif
 } IEEE754_flt_t;

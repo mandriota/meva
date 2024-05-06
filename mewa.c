@@ -47,7 +47,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <tgmath.h>
 
 #ifdef HAVE_LIBREADLINE
@@ -517,13 +516,13 @@ typedef struct {
 
 void nd_tree_print_cmx(cmx_t cmx) {
   if (creal(cmx) != 0 && cimag(cmx) != 0) {
-    printf(CLR_PRIM "%Lf %Lfi\n" CLR_RESET, creal(cmx), cimag(cmx));
+    printf(CLR_PRIM "%lf %lfi\n" CLR_RESET, creal(cmx), cimag(cmx));
   } else if (creal(cmx) == 0 && cimag(cmx) == 0) {
     printf(CLR_PRIM "0\n" CLR_RESET);
   } else if (creal(cmx) != 0) {
-    printf(CLR_PRIM "%Lf\n" CLR_RESET, creal(cmx));
+    printf(CLR_PRIM "%lf\n" CLR_RESET, creal(cmx));
   } else if (cimag(cmx) != 0)
-    printf(CLR_PRIM "%Lfi\n" CLR_RESET, cimag(cmx));
+    printf(CLR_PRIM "%lfi\n" CLR_RESET, cimag(cmx));
 }
 
 void nd_tree_print(StackEmuEl_nd_tree_print stack_emu[], Node nodes[static 1],
@@ -556,7 +555,7 @@ void nd_tree_print(StackEmuEl_nd_tree_print stack_emu[], Node nodes[static 1],
         printf(CLR_PRIM "%.*s" CLR_RESET "\n", ptr_off, ptr);
         goto while2_final;
       case NT_PRIM_FLT:
-        printf(CLR_PRIM "%Lf\n" CLR_RESET, nodes[node].as.pm.n_flt);
+        printf(CLR_PRIM "%lf\n" CLR_RESET, nodes[node].as.pm.n_flt);
         goto while2_final;
       case NT_PRIM_CMX:
         nd_tree_print_cmx(nodes[node].as.pm.n_cmx);
