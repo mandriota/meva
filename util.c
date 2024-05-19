@@ -19,6 +19,7 @@
 \******************************************************************************/
 
 #include "util.h"
+#include "intratypes.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -62,12 +63,8 @@ ssize_t getline(char **restrict lineptr, size_t *restrict n,
   return cp;
 }
 
-//=:util:memory
-size_t align(size_t sz, size_t alignment) {
-  return sz + (alignment - ((sz - 1) & (alignment - 1))) - 1;
-}
-
 //=:util:encoding
+
 unt_t encode_symbol_c(char c) {
   if (is_upper(c))
     return (c - 'A') + 1;
@@ -145,31 +142,58 @@ char *int_stringify(char *dst, char *dst_end, int_t num) {
 }
 
 //=:runtime:operators
-int_t pow_int(int_t base, int_t expo) {
-  if (expo == 0)
-    return 1;
-  if (expo == 1)
-    return base;
 
-  int_t rt = 1;
-  while (expo > 1) {
-    if (expo % 2 == 1)
-      rt *= base;
-    expo /= 2;
-    base *= base;
+NodeType pow_int(Primitive *rt, int_t base, int_t expo) {
+  rt->n_int = 1;
+  NodeType rtt = NT_PRIM_INT;
+
+  if (expo == 0)
+    return rtt;
+  if (expo == 1) {
+    rt->n_int = base;
+    return rtt;
   }
-  return rt * base;
+
+  Primitive base_tmp = (Primitive){.n_int = base};
+  int_t expo_tmp = expo;
+
+  while (true) {
+    if (expo_tmp % 2 == 1)
+      rtt = mul_int(rt, rt->n_int, base_tmp.n_int);
+
+    if (rtt != NT_PRIM_INT)
+      goto pow_flt;
+
+    expo_tmp /= 2;
+
+    if (expo_tmp == 0)
+      break;
+
+    rtt = mul_int(&base_tmp, base_tmp.n_int, base_tmp.n_int);
+  }
+
+  return NT_PRIM_INT;
+
+pow_flt:
+  rt->n_flt = pow((flt_t)base, (flt_t)expo);
+  return NT_PRIM_FLT;
 }
 
-int_t fac_int(int_t base, int_t step) {
+NodeType fac_int(Primitive *rt, int_t base, int_t step) {
   if (base == 0)
     return 1;
 
-  int_t rt = 1;
-  for (int_t i = base; i >= 2; i -= step)
-    rt *= i;
+  NodeType rtt = NT_PRIM_INT;
+  *rt = (Primitive){.n_int = 1};
 
-  return rt;
+  int_t i = base;
+  for (; i >= 2 && rtt == NT_PRIM_INT; i -= step)
+    rtt = mul_int(rt, rt->n_int, i);
+
+  for (; i >= 2; i -= step)
+    rt->n_flt *= i;
+
+  return rtt;
 }
 
 flt_t fac_flt_helper(flt_t i, flt_t step) {
@@ -189,36 +213,4 @@ flt_t fac_flt(flt_t base, flt_t step) {
               fac_flt_helper(base - i, step));
 
   return rt;
-}
-
-bol_t is_almost_equal_flt(flt_t x, flt_t y) {
-  if (x == y)
-    return true;
-  if (isnan(x) || isinf(x) || isnan(y) || isinf(y))
-    return false;
-
-  IEEE754_flt_t x_ieee754 = {.lit = x};
-  IEEE754_flt_t y_ieee754 = {.lit = y};
-
-  if (x < MAX_DIFF_ULPS_FROM || y < MAX_DIFF_ULPS_FROM)
-    return fabsl(x - y) < MAX_DIFF_ABS;
-  if (x_ieee754.sign != y_ieee754.sign ||
-      llabs((int64_t)x_ieee754.expo - (int64_t)y_ieee754.expo) > 1)
-    return false;
-
-  if (x_ieee754.expo > y_ieee754.expo) {
-    y_ieee754.mant += MAX_DIFF_ULPS * 2;
-    return y_ieee754.mant - x_ieee754.mant <= MAX_DIFF_ULPS;
-  } else if (x_ieee754.expo < y_ieee754.expo) {
-    x_ieee754.mant += MAX_DIFF_ULPS * 2;
-    return x_ieee754.mant - y_ieee754.mant <= MAX_DIFF_ULPS;
-  }
-
-  return llabs((int64_t)x_ieee754.mant - (int64_t)y_ieee754.mant) <=
-         MAX_DIFF_ULPS;
-}
-
-bol_t is_almost_equal_cmx(cmx_t x, cmx_t y) {
-  return is_almost_equal_flt(creal(x), creal(y)) &&
-         is_almost_equal_flt(cimag(x), cimag(y));
 }

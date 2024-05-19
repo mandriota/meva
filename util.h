@@ -23,6 +23,8 @@
 
 #include "config.h"
 
+#include "intratypes.h"
+
 #include <complex.h>
 #include <limits.h>
 #include <stdbool.h> // IWYU pragma: keep
@@ -46,6 +48,7 @@
 //     \__,_|\__|_|_|
 
 //=:util:error_handling
+
 #define FATAL(...)                                                             \
   {                                                                            \
     fprintf(stderr, CLR_ERR_MSG "FATAL" CLR_RESET ": " __VA_ARGS__);           \
@@ -72,6 +75,7 @@
   }
 
 //=:util:debug
+
 #ifdef NDEBUG
 #define DBG_PRINT(...)
 #define DBG_FATAL(...)
@@ -87,6 +91,7 @@
 #endif
 
 //=:util:other
+
 #define STRINGIFY(name) #name
 
 #define STRINGIFY_CASE(name)                                                   \
@@ -103,7 +108,12 @@
 ssize_t getline(char **lineptr, size_t *n, FILE *stream);
 #endif
 
+#define MAX(a, b) (a >= b ? a : b)
+
+#define ABS(a) (a >= 0 ? a : -a)
+
 //=:util:ascii
+
 static inline bool is_whitespace(char c) {
   return c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n';
 }
@@ -119,6 +129,7 @@ static inline bool is_letter(char c) {
 static inline bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
 //=:util:data_structures
+
 typedef struct {
   char *data;
   size_t len;
@@ -126,6 +137,7 @@ typedef struct {
 } StringBuffer;
 
 //=:util:types
+
 typedef double complex cmx_t;
 
 typedef double flt_t;
@@ -148,9 +160,13 @@ typedef bool bol_t;
 #endif
 
 //=:util:memory
-size_t align(size_t sz, size_t alignment);
+
+static inline size_t align(size_t sz, size_t alignment) {
+  return sz + (alignment - ((sz - 1) & (alignment - 1))) - 1;
+}
 
 //=:util:encoding
+
 unt_t encode_symbol_c(char c);
 
 char decode_symbol_c(char c);
@@ -175,33 +191,107 @@ typedef union {
   bol_t n_bol;
 } Primitive;
 
-int_t pow_int(int_t base, int_t expo);
+//=:runtime:operators
 
-int_t fac_int(int_t base, int_t step);
+static inline NodeType add_int(Primitive *rt, int_t a, int_t b) {
+  if ((a < 0) == (b < 0) && INT_T_MAX - ABS(a) < ABS(b)) {
+    rt->n_flt = (flt_t)a + b;
+    return NT_PRIM_FLT;
+  }
+
+  rt->n_int = a + b;
+  return NT_PRIM_INT;
+}
+
+static inline NodeType sub_int(Primitive *rt, int_t a, int_t b) {
+  return add_int(rt, a, -b);
+}
+
+static inline NodeType mul_int(Primitive *rt, int_t a, int_t b) {
+  if (INT_T_MAX / b < a) {
+    rt->n_flt = (flt_t)a * b;
+    return NT_PRIM_FLT;
+  }
+
+  rt->n_int = a * b;
+  return NT_PRIM_INT;
+}
+
+NodeType pow_int(Primitive *rt, int_t base, int_t expo);
+
+NodeType fac_int(Primitive *rt, int_t base, int_t step);
 
 flt_t fac_flt(flt_t base, flt_t step);
 
-#if '\x12\x34\x56\x78' == 0x12345678
-#define USE_BIG_ENDIAN
-#endif
+//=:intratypes:stringify
 
-typedef union {
-  flt_t lit;
-#ifdef USE_BIG_ENDIAN
-  struct {
-    unt_t mant : DBL_MANT_DIG - 1;
-    unt_t expo : sizeof(flt_t) * 8 - DBL_MANT_DIG;
-    unt_t sign : 1;
-  };
-#else
-  struct {
-    unt_t sign : 1;
-    unt_t expo : sizeof(flt_t) * 8 - DBL_MANT_DIG;
-    unt_t mant : DBL_MANT_DIG - 1;
-  };
-#endif
-} IEEE754_flt_t;
+static inline const char *tt_stringify(TokenType tt) {
+  switch (tt) {
+    STRINGIFY_CASE(TT_ILL)
+    STRINGIFY_CASE(TT_EOS)
+    STRINGIFY_CASE(TT_SYM)
+    STRINGIFY_CASE(TT_INT)
+    STRINGIFY_CASE(TT_FLT)
+    STRINGIFY_CASE(TT_CMX)
+    STRINGIFY_CASE(TT_FAL)
+    STRINGIFY_CASE(TT_TRU)
+    STRINGIFY_CASE(TT_LET)
+    STRINGIFY_CASE(TT_AND)
+    STRINGIFY_CASE(TT_ORR)
+    STRINGIFY_CASE(TT_GRE)
+    STRINGIFY_CASE(TT_LES)
+    STRINGIFY_CASE(TT_GEQ)
+    STRINGIFY_CASE(TT_LEQ)
+    STRINGIFY_CASE(TT_EQU)
+    STRINGIFY_CASE(TT_NEQ)
+    STRINGIFY_CASE(TT_ADD)
+    STRINGIFY_CASE(TT_SUB)
+    STRINGIFY_CASE(TT_MUL)
+    STRINGIFY_CASE(TT_QUO)
+    STRINGIFY_CASE(TT_MOD)
+    STRINGIFY_CASE(TT_POW)
+    STRINGIFY_CASE(TT_NOT)
+    STRINGIFY_CASE(TT_FAC)
+    STRINGIFY_CASE(TT_LP0)
+    STRINGIFY_CASE(TT_RP0)
+    STRINGIFY_CASE(TT_ABS)
+    STRINGIFY_CASE(TT_EOX)
+  }
 
-bol_t is_almost_equal_flt(flt_t x, flt_t y);
+  return STRINGIFY(INVALID_TT);
+}
 
-bol_t is_almost_equal_cmx(cmx_t x, cmx_t y);
+static inline const char *nt_stringify(NodeType nt) {
+  switch (nt) {
+    STRINGIFY_CASE(NT_PRIM_SYM)
+    STRINGIFY_CASE(NT_PRIM_INT)
+    STRINGIFY_CASE(NT_PRIM_FLT)
+    STRINGIFY_CASE(NT_PRIM_CMX)
+    STRINGIFY_CASE(NT_PRIM_BOL)
+    STRINGIFY_CASE(NT_BIOP_LET)
+    STRINGIFY_CASE(NT_BIOP_AND)
+    STRINGIFY_CASE(NT_BIOP_ORR)
+    STRINGIFY_CASE(NT_BIOP_GRE)
+    STRINGIFY_CASE(NT_BIOP_LES)
+    STRINGIFY_CASE(NT_BIOP_GEQ)
+    STRINGIFY_CASE(NT_BIOP_LEQ)
+    STRINGIFY_CASE(NT_BIOP_EQU)
+    STRINGIFY_CASE(NT_BIOP_NEQ)
+    STRINGIFY_CASE(NT_BIOP_ADD)
+    STRINGIFY_CASE(NT_BIOP_SUB)
+    STRINGIFY_CASE(NT_BIOP_MUL)
+    STRINGIFY_CASE(NT_BIOP_QUO)
+    STRINGIFY_CASE(NT_BIOP_MOD)
+    STRINGIFY_CASE(NT_BIOP_POW)
+    STRINGIFY_CASE(NT_BIOP_FAC)
+    STRINGIFY_CASE(NT_UNOP_ABS)
+    STRINGIFY_CASE(NT_UNOP_NOT)
+    STRINGIFY_CASE(NT_UNOP_NOP)
+    STRINGIFY_CASE(NT_UNOP_NEG)
+    STRINGIFY_CASE(NT_FUNC)
+    STRINGIFY_CASE(NT_CALL)
+    STRINGIFY_CASE(NT_CALL_ANON)
+  }
+
+  return STRINGIFY(INVALID_NT);
+}
