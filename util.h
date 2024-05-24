@@ -40,12 +40,6 @@
 #endif
 
 //=:util
-//           _   _ _
-//          | | (_) |
-//     _   _| |_ _| |
-//    | | | | __| | |
-//    | |_| | |_| | |
-//     \__,_|\__|_|_|
 
 //=:util:error_handling
 
@@ -174,12 +168,6 @@ char decode_symbol_c(char c);
 char *decode_symbol(char *dst, char *dst_end, unt_t src);
 
 //=:runtime
-//                      _   _
-//                     | | (_)
-//     _ __ _   _ _ __ | |_ _ _ __ ___   ___
-//    | '__| | | | '_ \| __| | '_ ` _ \ / _	;
-//    | |  | |_| | | | | |_| | | | | | |  __/
-//    |_|   \__,_|_| |_|\__|_|_| |_| |_|\___|
 
 char *int_stringify(char *dst, char *dst_end, int_t num);
 

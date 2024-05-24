@@ -26,12 +26,6 @@
 #include <tgmath.h>
 
 //=:util
-//           _   _ _
-//          | | (_) |
-//     _   _| |_ _| |
-//    | | | | __| | |
-//    | |_| | |_| | |
-//     \__,_|\__|_|_|
 
 ssize_t getline(char **restrict lineptr, size_t *restrict n,
                 FILE *restrict stream) {
@@ -109,12 +103,6 @@ char *decode_symbol(char *dst, char *dst_end, unt_t src) {
 }
 
 //=:runtime
-//                      _   _
-//                     | | (_)
-//     _ __ _   _ _ __ | |_ _ _ __ ___   ___
-//    | '__| | | | '_ \| __| | '_ ` _ \ / _	;
-//    | |  | |_| | | | | |_| | | | | | |  __/
-//    |_|   \__,_|_| |_|\__|_|_| |_| |_|\___|
 
 char *int_stringify(char *dst, char *dst_end, int_t num) {
   assert(dst_end >= dst);
