@@ -43,6 +43,9 @@
 // error messages color
 #define CLR_ERR_MSG CLR_BRED
 
+// warning messages color
+#define CLR_WRN_MSG CLR_BYEL
+
 // info messages color
 #define CLR_INF_MSG CLR_BBLU
 
@@ -97,4 +100,4 @@
 // must be at least 1
 #define INTERNAL_READING_BUF_SIZE (512)
 
-#define NODE_BUF_SIZE (1<<20)
+#define NODE_BUF_SIZE (1 << 20)

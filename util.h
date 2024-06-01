@@ -61,6 +61,12 @@
     fflush(stderr);                                                            \
   }
 
+#define WARNING(...)                                                           \
+  {                                                                            \
+    fprintf(stderr, CLR_WRN_MSG "WARNING" CLR_RESET ": " __VA_ARGS__);         \
+    fflush(stderr);                                                            \
+  }
+
 #define TRY(type, expr)                                                        \
   {                                                                            \
     type err = expr;                                                           \
@@ -196,7 +202,7 @@ static inline NodeType sub_int(Primitive *rt, int_t a, int_t b) {
 }
 
 static inline NodeType mul_int(Primitive *rt, int_t a, int_t b) {
-  if (INT_T_MAX / b < a) {
+  if (INT_T_MAX / b < a && b != 0) {
     rt->n_flt = (flt_t)a * b;
     return NT_PRIM_FLT;
   }
@@ -209,7 +215,11 @@ NodeType pow_int(Primitive *rt, int_t base, int_t expo);
 
 NodeType fac_int(Primitive *rt, int_t base, int_t step);
 
-flt_t fac_flt(flt_t base, flt_t step);
+NodeType fac_flt(Primitive *rt, flt_t base, flt_t step);
+
+NodeType subfac_int(Primitive *rt, int_t base);
+
+NodeType subfac_flt(Primitive *rt, flt_t base);
 
 //=:intratypes:stringify
 

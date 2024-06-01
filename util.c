@@ -22,6 +22,7 @@
 #include "intratypes.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 #include <tgmath.h>
 
@@ -168,11 +169,17 @@ pow_flt:
 }
 
 NodeType fac_int(Primitive *rt, int_t base, int_t step) {
+  if (base < 0) {
+    WARNING("factorial of negative integer is equal to infinity\n");
+    rt->n_flt = INFINITY;
+    return NT_PRIM_FLT;
+  }
+
   if (base == 0)
     return 1;
 
+  rt->n_int = 1;
   NodeType rtt = NT_PRIM_INT;
-  *rt = (Primitive){.n_int = 1};
 
   int_t i = base;
   for (; i >= 2 && rtt == NT_PRIM_INT; i -= step)
@@ -193,12 +200,69 @@ flt_t fac_flt_helper(flt_t i, flt_t step) {
   return rt / step;
 }
 
-flt_t fac_flt(flt_t base, flt_t step) {
-  flt_t rt = pow(step, base / step) * tgamma(1 + base / step);
+#define ASSERT_NOT_NEGATIVE_INT(x, fn, what, rt, action)                       \
+  if (base < 0 && fmod(-base, 1) <= MAX_DIFF_ABS) {                            \
+    WARNING(fn " of negative integer " what "\n");                             \
+    action;                                                                    \
+    return rt;                                                                 \
+  }
+
+NodeType fac_flt(Primitive *rt, flt_t base, flt_t step) {
+  ASSERT_NOT_NEGATIVE_INT(base, "factorial", "is equal to infinity",
+                          NT_PRIM_FLT, rt->n_flt = INFINITY);
+
+  rt->n_flt = pow(step, base / step) * tgamma(1 + base / step);
 
   for (int_t i = 1; i < step; ++i)
-    rt *= pow(pow(step, (step - i) / step) / tgamma(i / step),
-              fac_flt_helper(base - i, step));
+    rt->n_flt *= pow(pow(step, (step - i) / step) / tgamma(i / step),
+                     fac_flt_helper(base - i, step));
 
-  return rt;
+  return NT_PRIM_FLT;
+}
+
+NodeType subfac_int(Primitive *rt, int_t base) {
+  if (base < 0)
+    return subfac_flt(rt, base);
+
+  rt->n_int = 1;
+  NodeType rtt = NT_PRIM_INT;
+
+  int_t i = 1;
+
+  for (; i <= base && rtt == NT_PRIM_INT; ++i) {
+    rtt = mul_int(rt, i, rt->n_int);
+    if (rtt != NT_PRIM_INT)
+      continue;
+    rtt = add_int(rt, rt->n_int, i % 2 == 0 ? 1 : -1);
+  }
+
+  for (; i <= base; ++i)
+    rt->n_flt = (i % 2 == 0 ? 1 : -1) + i * rt->n_flt;
+
+  return rtt;
+}
+
+enum {
+  GAMMA_LOWER_QUO_E_ITER = 1 << 6,
+};
+
+cmx_t gamma_lower_quo_e(flt_t s) {
+  cmx_t rt = 0;
+
+  for (int i = 0; i <= GAMMA_LOWER_QUO_E_ITER; ++i)
+    rt += (i % 2 == 0 ? 1 : -1) * tgamma(s) / (tgamma(s + i + 1));
+
+  return cpow((cmx_t)-1, (cmx_t)s) * rt;
+}
+
+NodeType subfac_flt(Primitive *rt, flt_t base) {
+  ASSERT_NOT_NEGATIVE_INT(base, "subfactorial", "currently is not implemented",
+                          NT_PRIM_FLT, rt->n_flt = NAN);
+
+  if (base >= 0 && fmod(base, 1) <= MAX_DIFF_ABS) {
+    rt->n_flt = creal(tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1));
+    return NT_PRIM_FLT;
+  }
+  rt->n_cmx = tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1);
+  return NT_PRIM_CMX;
 }

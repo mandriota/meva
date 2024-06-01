@@ -34,6 +34,7 @@
 
 //=:includes
 
+#include "intratypes.h"
 #include "util.h"
 
 #include <assert.h>
@@ -71,7 +72,7 @@ _Static_assert(INTERNAL_READING_BUF_SIZE > 0,
 _Static_assert(NODE_BUF_SIZE > 0, "NODE_BUF_SIZE must be at least 1");
 
 //=:reader
- 
+
 //=:reader:reader
 
 typedef struct {
@@ -756,6 +757,8 @@ IR_ERR ir_unop_exec_n_int(Interpreter *ir, NodeType op, int_t a) {
 
   switch (op) {
     EXEC_CASE(NT_UNOP_NOP, )
+    EXEC_CASE(NT_UNOP_NOT,
+              ir->nodes[0].type = subfac_int(&ir->nodes[0].as.pm, a))
     EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.n_int = -a)
     EXEC_CASE(NT_UNOP_ABS, ir->nodes[0].as.pm.n_int = a < 0 ? -a : a)
   default:
@@ -770,6 +773,8 @@ IR_ERR ir_unop_exec_n_flt(Interpreter *ir, NodeType op, flt_t a) {
 
   switch (op) {
     EXEC_CASE(NT_UNOP_NOP, )
+    EXEC_CASE(NT_UNOP_NOT,
+              ir->nodes[0].type = subfac_flt(&ir->nodes[0].as.pm, a))
     EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.n_flt = -a)
     EXEC_CASE(NT_UNOP_ABS, ir->nodes[0].as.pm.n_flt = fabs(a))
   default:
@@ -904,13 +909,21 @@ IR_ERR ir_biop_exec_n_flt(Interpreter *ir, NodeType op, flt_t a, flt_t b) {
     EXEC_CASE(NT_BIOP_SUB, ir->nodes[0].as.pm.n_flt = a - b)
     EXEC_CASE(NT_BIOP_MUL, ir->nodes[0].as.pm.n_flt = a * b)
     EXEC_CASE(NT_BIOP_MOD, ir->nodes[0].as.pm.n_flt = fmod(a, b))
-    EXEC_CASE(NT_BIOP_POW, ir->nodes[0].as.pm.n_flt = pow(a, b))
-    EXEC_CASE(NT_BIOP_FAC, ir->nodes[0].as.pm.n_flt = fac_flt(a, b))
+    EXEC_CASE(NT_BIOP_FAC,
+              ir->nodes[0].type = fac_flt(&ir->nodes[0].as.pm, a, b))
   case NT_BIOP_QUO:
     if (b == 0)
       return IR_ERR_DIV_BY_ZERO;
 
     ir->nodes[0].as.pm.n_flt = a / b;
+    break;
+  case NT_BIOP_POW:
+    ir->nodes[0].as.pm.n_flt = pow(a, b);
+
+    if (isnan(ir->nodes[0].as.pm.n_flt)) {
+      ir->nodes[0].type = NT_PRIM_CMX;
+      ir->nodes[0].as.pm.n_cmx = pow((cmx_t)a, (cmx_t)b);
+    }
     break;
   default:
     return ir_biop_exec_cmp_n_flt(ir, op, a, b);
