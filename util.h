@@ -178,48 +178,66 @@ char *decode_symbol(char *dst, char *dst_end, unt_t src);
 char *int_stringify(char *dst, char *dst_end, int_t num);
 
 typedef union {
-  cmx_t n_cmx;
-  flt_t n_flt;
-  int_t n_int;
-  unt_t n_unt;
-  bol_t n_bol;
+  cmx_t c;
+  flt_t f;
+  int_t i;
+  unt_t u;
+  bol_t b;
 } Primitive;
 
 //=:runtime:operators
 
-static inline NodeType add_int(Primitive *rt, int_t a, int_t b) {
+typedef union {
+  int_t i;
+  flt_t f;
+} PrimitiveIF;
+
+static inline PrimitiveIF *pm_to_pm_if(Primitive *pm) {
+  return (PrimitiveIF *)pm;
+}
+
+typedef union {
+  flt_t f;
+  cmx_t c;
+} PrimitiveFC;
+
+static inline PrimitiveFC *pm_to_pm_fc(Primitive *pm) {
+  return (PrimitiveFC *)pm;
+}
+
+static inline NodeType add_int(PrimitiveIF *rt, int_t a, int_t b) {
   if ((a < 0) == (b < 0) && INT_T_MAX - ABS(a) < ABS(b)) {
-    rt->n_flt = (flt_t)a + b;
+    rt->f = (flt_t)a + b;
     return NT_PRIM_FLT;
   }
 
-  rt->n_int = a + b;
+  rt->i = a + b;
   return NT_PRIM_INT;
 }
 
-static inline NodeType sub_int(Primitive *rt, int_t a, int_t b) {
+static inline NodeType sub_int(PrimitiveIF *rt, int_t a, int_t b) {
   return add_int(rt, a, -b);
 }
 
-static inline NodeType mul_int(Primitive *rt, int_t a, int_t b) {
+static inline NodeType mul_int(PrimitiveIF *rt, int_t a, int_t b) {
   if (INT_T_MAX / b < a && b != 0) {
-    rt->n_flt = (flt_t)a * b;
+    rt->f = (flt_t)a * b;
     return NT_PRIM_FLT;
   }
 
-  rt->n_int = a * b;
+  rt->i = a * b;
   return NT_PRIM_INT;
 }
 
-NodeType pow_int(Primitive *rt, int_t base, int_t expo);
+NodeType pow_int(PrimitiveIF *rt, int_t base, int_t expo);
 
-NodeType fac_int(Primitive *rt, int_t base, int_t step);
+NodeType fac_int(PrimitiveIF *rt, int_t base, int_t step);
 
-NodeType fac_flt(Primitive *rt, flt_t base, flt_t step);
+NodeType fac_flt(PrimitiveFC *rt, flt_t base, flt_t step);
 
 NodeType subfac_int(Primitive *rt, int_t base);
 
-NodeType subfac_flt(Primitive *rt, flt_t base);
+NodeType subfac_flt(PrimitiveFC *rt, flt_t base);
 
 //=:intratypes:stringify
 

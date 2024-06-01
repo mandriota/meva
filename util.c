@@ -132,23 +132,23 @@ char *int_stringify(char *dst, char *dst_end, int_t num) {
 
 //=:runtime:operators
 
-NodeType pow_int(Primitive *rt, int_t base, int_t expo) {
-  rt->n_int = 1;
+NodeType pow_int(PrimitiveIF *rt, int_t base, int_t expo) {
+  rt->i = 1;
   NodeType rtt = NT_PRIM_INT;
 
   if (expo == 0)
     return rtt;
   if (expo == 1) {
-    rt->n_int = base;
+    rt->i = base;
     return rtt;
   }
 
-  Primitive base_tmp = (Primitive){.n_int = base};
+  PrimitiveIF base_tmp = (PrimitiveIF){.i = base};
   int_t expo_tmp = expo;
 
   while (true) {
     if (expo_tmp % 2 == 1)
-      rtt = mul_int(rt, rt->n_int, base_tmp.n_int);
+      rtt = mul_int(rt, rt->i, base_tmp.i);
 
     if (rtt != NT_PRIM_INT)
       goto pow_flt;
@@ -158,35 +158,35 @@ NodeType pow_int(Primitive *rt, int_t base, int_t expo) {
     if (expo_tmp == 0)
       break;
 
-    rtt = mul_int(&base_tmp, base_tmp.n_int, base_tmp.n_int);
+    rtt = mul_int(&base_tmp, base_tmp.i, base_tmp.i);
   }
 
   return NT_PRIM_INT;
 
 pow_flt:
-  rt->n_flt = pow((flt_t)base, (flt_t)expo);
+  rt->f = pow((flt_t)base, (flt_t)expo);
   return NT_PRIM_FLT;
 }
 
-NodeType fac_int(Primitive *rt, int_t base, int_t step) {
+NodeType fac_int(PrimitiveIF *rt, int_t base, int_t step) {
   if (base < 0) {
     WARNING("factorial of negative integer is equal to infinity\n");
-    rt->n_flt = INFINITY;
+    rt->f = INFINITY;
     return NT_PRIM_FLT;
   }
 
   if (base == 0)
     return 1;
 
-  rt->n_int = 1;
+  rt->i = 1;
   NodeType rtt = NT_PRIM_INT;
 
   int_t i = base;
   for (; i >= 2 && rtt == NT_PRIM_INT; i -= step)
-    rtt = mul_int(rt, rt->n_int, i);
+    rtt = mul_int(rt, rt->i, i);
 
   for (; i >= 2; i -= step)
-    rt->n_flt *= i;
+    rt->f *= i;
 
   return rtt;
 }
@@ -207,14 +207,14 @@ flt_t fac_flt_helper(flt_t i, flt_t step) {
     return rt;                                                                 \
   }
 
-NodeType fac_flt(Primitive *rt, flt_t base, flt_t step) {
+NodeType fac_flt(PrimitiveFC *rt, flt_t base, flt_t step) {
   ASSERT_NOT_NEGATIVE_INT(base, "factorial", "is equal to infinity",
-                          NT_PRIM_FLT, rt->n_flt = INFINITY);
+                          NT_PRIM_FLT, rt->f = INFINITY);
 
-  rt->n_flt = pow(step, base / step) * tgamma(1 + base / step);
+  rt->f = pow(step, base / step) * tgamma(1 + base / step);
 
   for (int_t i = 1; i < step; ++i)
-    rt->n_flt *= pow(pow(step, (step - i) / step) / tgamma(i / step),
+    rt->f *= pow(pow(step, (step - i) / step) / tgamma(i / step),
                      fac_flt_helper(base - i, step));
 
   return NT_PRIM_FLT;
@@ -222,22 +222,22 @@ NodeType fac_flt(Primitive *rt, flt_t base, flt_t step) {
 
 NodeType subfac_int(Primitive *rt, int_t base) {
   if (base < 0)
-    return subfac_flt(rt, base);
+    return subfac_flt(pm_to_pm_fc(rt), base);
 
-  rt->n_int = 1;
+  rt->i = 1;
   NodeType rtt = NT_PRIM_INT;
 
   int_t i = 1;
 
   for (; i <= base && rtt == NT_PRIM_INT; ++i) {
-    rtt = mul_int(rt, i, rt->n_int);
+    rtt = mul_int(pm_to_pm_if(rt), i, rt->i);
     if (rtt != NT_PRIM_INT)
       continue;
-    rtt = add_int(rt, rt->n_int, i % 2 == 0 ? 1 : -1);
+    rtt = add_int(pm_to_pm_if(rt), rt->i, i % 2 == 0 ? 1 : -1);
   }
 
   for (; i <= base; ++i)
-    rt->n_flt = (i % 2 == 0 ? 1 : -1) + i * rt->n_flt;
+    rt->f = (i % 2 == 0 ? 1 : -1) + i * rt->f;
 
   return rtt;
 }
@@ -255,14 +255,14 @@ cmx_t gamma_lower_quo_e(flt_t s) {
   return cpow((cmx_t)-1, (cmx_t)s) * rt;
 }
 
-NodeType subfac_flt(Primitive *rt, flt_t base) {
+NodeType subfac_flt(PrimitiveFC *rt, flt_t base) {
   ASSERT_NOT_NEGATIVE_INT(base, "subfactorial", "currently is not implemented",
-                          NT_PRIM_FLT, rt->n_flt = NAN);
+                          NT_PRIM_FLT, rt->f = NAN);
 
   if (base >= 0 && fmod(base, 1) <= MAX_DIFF_ABS) {
-    rt->n_flt = creal(tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1));
+    rt->f = creal(tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1));
     return NT_PRIM_FLT;
   }
-  rt->n_cmx = tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1);
+  rt->c = tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1);
   return NT_PRIM_CMX;
 }
