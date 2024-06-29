@@ -67,6 +67,12 @@
     fflush(stderr);                                                            \
   }
 
+#define WARNING_INT_TO_CMX(reason)                                             \
+  {                                                                            \
+    WARNING("number was converted into complex due to " reason "\n");          \
+    WARNING("this will result in accuracy reduction\n");                       \
+  }
+
 #define TRY(type, expr)                                                        \
   {                                                                            \
     type err = expr;                                                           \
@@ -140,8 +146,6 @@ typedef struct {
 
 typedef double complex cmx_t;
 
-typedef double flt_t;
-
 #ifdef BITINT_MAXWIDTH
 typedef _BitInt(BITINT_MAXWIDTH) int_t;
 
@@ -179,7 +183,6 @@ char *int_stringify(char *dst, char *dst_end, int_t num);
 
 typedef union {
   cmx_t c;
-	flt_t f;
   int_t i;
   unt_t u;
   bol_t b;
@@ -187,57 +190,39 @@ typedef union {
 
 //=:runtime:operators
 
-typedef union {
-  int_t i;
-  flt_t f;
-} Primitive_I_F;
-
-static inline Primitive_I_F *pm_to_pm_if(Primitive *pm) {
-  return (Primitive_I_F *)pm;
-}
-
-typedef union {
-  flt_t f;
-  cmx_t c;
-} Primitive_F_C;
-
-static inline Primitive_F_C *pm_to_pm_fc(Primitive *pm) {
-  return (Primitive_F_C *)pm;
-}
-
-static inline Node_Type add_int(Primitive_I_F *rt, int_t a, int_t b) {
+static inline Node_Type add_int(Primitive *rt, int_t a, int_t b) {
   if ((a < 0) == (b < 0) && INT_T_MAX - ABS(a) < ABS(b)) {
-    rt->f = (flt_t)a + b;
-    return NT_PRIM_FLT;
+    rt->c = (cmx_t)a + b;
+    return NT_PRIM_CMX;
   }
 
   rt->i = a + b;
   return NT_PRIM_INT;
 }
 
-static inline Node_Type sub_int(Primitive_I_F *rt, int_t a, int_t b) {
+static inline Node_Type sub_int(Primitive *rt, int_t a, int_t b) {
   return add_int(rt, a, -b);
 }
 
-static inline Node_Type mul_int(Primitive_I_F *rt, int_t a, int_t b) {
+static inline Node_Type mul_int(Primitive *rt, int_t a, int_t b) {
   if (INT_T_MAX / b < a && b != 0) {
-    rt->f = (flt_t)a * b;
-    return NT_PRIM_FLT;
+    rt->c = (cmx_t)a * b;
+    return NT_PRIM_CMX;
   }
 
   rt->i = a * b;
   return NT_PRIM_INT;
 }
 
-Node_Type pow_int(Primitive_I_F *rt, int_t base, int_t expo);
+Node_Type pow_int(Primitive *rt, int_t base, int_t expo);
 
-Node_Type fac_int(Primitive_I_F *rt, int_t base, int_t step);
+Node_Type fac_int(Primitive *rt, int_t base, int_t step);
 
-Node_Type fac_flt(Primitive_F_C *rt, flt_t base, flt_t step);
+Node_Type fac_cmx(Primitive *rt, cmx_t base, int_t step);
 
 Node_Type subfac_int(Primitive *rt, int_t base);
 
-Node_Type subfac_flt(Primitive_F_C *rt, flt_t base);
+Node_Type subfac_cmx(Primitive *rt, cmx_t base);
 
 //=:intratypes:stringify
 
@@ -247,7 +232,6 @@ static inline const char *tt_stringify(Token_Type tt) {
     STRINGIFY_CASE(TT_EOS)
     STRINGIFY_CASE(TT_SYM)
     STRINGIFY_CASE(TT_INT)
-    STRINGIFY_CASE(TT_FLT)
     STRINGIFY_CASE(TT_CMX)
     STRINGIFY_CASE(TT_FAL)
     STRINGIFY_CASE(TT_TRU)
@@ -281,7 +265,6 @@ static inline const char *nt_stringify(Node_Type nt) {
   switch (nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
     STRINGIFY_CASE(NT_PRIM_INT)
-    STRINGIFY_CASE(NT_PRIM_FLT)
     STRINGIFY_CASE(NT_PRIM_CMX)
     STRINGIFY_CASE(NT_PRIM_BOL)
     STRINGIFY_CASE(NT_BIOP_LET)

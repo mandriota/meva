@@ -29,7 +29,6 @@ typedef enum {
 
   TT_SYM,
   TT_INT,
-  TT_FLT,
   TT_CMX,
   TT_FAL,
   TT_TRU,
@@ -71,7 +70,6 @@ typedef enum {
 typedef enum {
   NT_PRIM_SYM = TT_SYM,
   NT_PRIM_INT = TT_INT,
-  NT_PRIM_FLT = TT_FLT,
   NT_PRIM_CMX = TT_CMX,
   NT_PRIM_BOL,
 

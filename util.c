@@ -132,7 +132,7 @@ char *int_stringify(char *dst, char *dst_end, int_t num) {
 
 //=:runtime:operators
 
-Node_Type pow_int(Primitive_I_F *rt, int_t base, int_t expo) {
+Node_Type pow_int(Primitive *rt, int_t base, int_t expo) {
   rt->i = 1;
   Node_Type rtt = NT_PRIM_INT;
 
@@ -143,15 +143,15 @@ Node_Type pow_int(Primitive_I_F *rt, int_t base, int_t expo) {
     return rtt;
   }
 
-  Primitive_I_F base_tmp = (Primitive_I_F){.i = base};
+  Primitive base_tmp = (Primitive){.i = base};
   int_t expo_tmp = expo;
 
   while (true) {
-    if (expo_tmp % 2 == 1)
+    if (expo_tmp % 2 == 1 && rtt == NT_PRIM_INT)
       rtt = mul_int(rt, rt->i, base_tmp.i);
 
     if (rtt != NT_PRIM_INT)
-      goto pow_flt;
+      goto pow_cmx;
 
     expo_tmp /= 2;
 
@@ -163,16 +163,19 @@ Node_Type pow_int(Primitive_I_F *rt, int_t base, int_t expo) {
 
   return NT_PRIM_INT;
 
-pow_flt:
-  rt->f = pow((flt_t)base, (flt_t)expo);
-  return NT_PRIM_FLT;
+pow_cmx:
+  WARNING_INT_TO_CMX("integer overflow");
+
+  rt->c = pow((double)base, (double)expo);
+  return NT_PRIM_CMX;
 }
 
-Node_Type fac_int(Primitive_I_F *rt, int_t base, int_t step) {
+Node_Type fac_int(Primitive *rt, int_t base, int_t step) {
   if (base < 0) {
     WARNING("factorial of negative integer is equal to infinity\n");
-    rt->f = INFINITY;
-    return NT_PRIM_FLT;
+
+    rt->c = INFINITY;
+    return NT_PRIM_CMX;
   }
 
   if (base == 0)
@@ -186,13 +189,16 @@ Node_Type fac_int(Primitive_I_F *rt, int_t base, int_t step) {
     rtt = mul_int(rt, rt->i, i);
 
   for (; i >= 2; i -= step)
-    rt->f *= i;
+    rt->c *= i;
+
+  if (rtt != NT_PRIM_INT)
+    WARNING_INT_TO_CMX("integer overflow");
 
   return rtt;
 }
 
-flt_t fac_flt_helper(flt_t i, flt_t step) {
-  flt_t rt = 0;
+cmx_t fac_cmx_helper(cmx_t i, int_t step) {
+  cmx_t rt = 0;
 
   for (int_t j = 1; j <= step; ++j)
     rt += cos(acos(cos(2 * j * M_PI / step)) * i);
@@ -200,29 +206,42 @@ flt_t fac_flt_helper(flt_t i, flt_t step) {
   return rt / step;
 }
 
-#define ASSERT_NOT_NEGATIVE_INT(x, fn, what, rt, action)                       \
-  if (base < 0 && fmod(-base, 1) <= MAX_DIFF_ABS) {                            \
+#define ASSERT_NON_NEG_INT(x, fn, what, rt, action)                            \
+  if (x < 0 && fmod(-x, 1) <= MAX_DIFF_ABS) {                                  \
     WARNING(fn " of negative integer " what "\n");                             \
     action;                                                                    \
     return rt;                                                                 \
   }
 
-Node_Type fac_flt(Primitive_F_C *rt, flt_t base, flt_t step) {
-  ASSERT_NOT_NEGATIVE_INT(base, "factorial", "is equal to infinity",
-                          NT_PRIM_FLT, rt->f = INFINITY);
+#define ASSERT_IMG_ZER(x, fn)                                                  \
+  if (cimag(x) != 0) {                                                         \
+    WARNING(fn                                                                 \
+            " of a number with imaginary part != 0 is not implemented yet");   \
+    rt->c = NAN;                                                               \
+    return NT_PRIM_CMX;                                                        \
+  }
 
-  rt->f = pow(step, base / step) * tgamma(1 + base / step);
+Node_Type fac_cmx(Primitive *rt, cmx_t base, int_t step) {
+  ASSERT_IMG_ZER(base, "factorial");
+
+  double rbase = creal(base);
+  double rstep = (double)step;
+
+  ASSERT_NON_NEG_INT(rbase, "factorial", "is equal to infinity", NT_PRIM_CMX,
+                     rt->c = INFINITY);
+
+  rt->c = pow(rstep, rbase / rstep) * tgamma(1 + rbase / rstep);
 
   for (int_t i = 1; i < step; ++i)
-    rt->f *= pow(pow(step, (step - i) / step) / tgamma(i / step),
-                     fac_flt_helper(base - i, step));
+    rt->c *= pow(pow(rstep, (rstep - i) / rstep) / tgamma(i / rstep),
+                 fac_cmx_helper(rbase - i, rstep));
 
-  return NT_PRIM_FLT;
+  return NT_PRIM_CMX;
 }
 
 Node_Type subfac_int(Primitive *rt, int_t base) {
   if (base < 0)
-    return subfac_flt(pm_to_pm_fc(rt), base);
+    return subfac_cmx(rt, base);
 
   rt->i = 1;
   Node_Type rtt = NT_PRIM_INT;
@@ -230,14 +249,17 @@ Node_Type subfac_int(Primitive *rt, int_t base) {
   int_t i = 1;
 
   for (; i <= base && rtt == NT_PRIM_INT; ++i) {
-    rtt = mul_int(pm_to_pm_if(rt), i, rt->i);
+    rtt = mul_int(rt, i, rt->i);
     if (rtt != NT_PRIM_INT)
       continue;
-    rtt = add_int(pm_to_pm_if(rt), rt->i, i % 2 == 0 ? 1 : -1);
+    rtt = add_int(rt, rt->i, i % 2 == 0 ? 1 : -1);
   }
 
   for (; i <= base; ++i)
-    rt->f = (i % 2 == 0 ? 1 : -1) + i * rt->f;
+    rt->c = (i % 2 == 0 ? 1 : -1) + i * rt->c;
+
+  if (rtt != NT_PRIM_INT)
+    WARNING_INT_TO_CMX("integer overflow");
 
   return rtt;
 }
@@ -246,7 +268,7 @@ enum {
   GAMMA_LOWER_QUO_E_ITER = 1 << 6,
 };
 
-cmx_t gamma_lower_quo_e(flt_t s) {
+cmx_t gamma_lower_quo_e(double s) {
   cmx_t rt = 0;
 
   for (int i = 0; i <= GAMMA_LOWER_QUO_E_ITER; ++i)
@@ -255,14 +277,18 @@ cmx_t gamma_lower_quo_e(flt_t s) {
   return cpow((cmx_t)-1, (cmx_t)s) * rt;
 }
 
-Node_Type subfac_flt(Primitive_F_C *rt, flt_t base) {
-  ASSERT_NOT_NEGATIVE_INT(base, "subfactorial", "currently is not implemented",
-                          NT_PRIM_FLT, rt->f = NAN);
+Node_Type subfac_cmx(Primitive *rt, cmx_t base) {
+  ASSERT_IMG_ZER(base, "subfactorial");
 
-  if (base >= 0 && fmod(base, 1) <= MAX_DIFF_ABS) {
-    rt->f = creal(tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1));
-    return NT_PRIM_FLT;
+  double rbase = creal(base);
+
+  ASSERT_NON_NEG_INT(rbase, "subfactorial", "currently is not implemented",
+                     NT_PRIM_CMX, rt->c = NAN);
+
+  if (rbase >= 0 && fmod(rbase, 1) <= MAX_DIFF_ABS) {
+    rt->c = creal(tgamma(rbase + 1) / M_E - gamma_lower_quo_e(rbase + 1));
+    return NT_PRIM_CMX;
   }
-  rt->c = tgamma(base + 1) / M_E - gamma_lower_quo_e(base + 1);
+  rt->c = tgamma(rbase + 1) / M_E - gamma_lower_quo_e(base + 1);
   return NT_PRIM_CMX;
 }
