@@ -132,9 +132,9 @@ char *int_stringify(char *dst, char *dst_end, int_t num) {
 
 //=:runtime:operators
 
-NodeType pow_int(PrimitiveIF *rt, int_t base, int_t expo) {
+Node_Type pow_int(Primitive_I_F *rt, int_t base, int_t expo) {
   rt->i = 1;
-  NodeType rtt = NT_PRIM_INT;
+  Node_Type rtt = NT_PRIM_INT;
 
   if (expo == 0)
     return rtt;
@@ -143,7 +143,7 @@ NodeType pow_int(PrimitiveIF *rt, int_t base, int_t expo) {
     return rtt;
   }
 
-  PrimitiveIF base_tmp = (PrimitiveIF){.i = base};
+  Primitive_I_F base_tmp = (Primitive_I_F){.i = base};
   int_t expo_tmp = expo;
 
   while (true) {
@@ -168,7 +168,7 @@ pow_flt:
   return NT_PRIM_FLT;
 }
 
-NodeType fac_int(PrimitiveIF *rt, int_t base, int_t step) {
+Node_Type fac_int(Primitive_I_F *rt, int_t base, int_t step) {
   if (base < 0) {
     WARNING("factorial of negative integer is equal to infinity\n");
     rt->f = INFINITY;
@@ -179,7 +179,7 @@ NodeType fac_int(PrimitiveIF *rt, int_t base, int_t step) {
     return 1;
 
   rt->i = 1;
-  NodeType rtt = NT_PRIM_INT;
+  Node_Type rtt = NT_PRIM_INT;
 
   int_t i = base;
   for (; i >= 2 && rtt == NT_PRIM_INT; i -= step)
@@ -207,7 +207,7 @@ flt_t fac_flt_helper(flt_t i, flt_t step) {
     return rt;                                                                 \
   }
 
-NodeType fac_flt(PrimitiveFC *rt, flt_t base, flt_t step) {
+Node_Type fac_flt(Primitive_F_C *rt, flt_t base, flt_t step) {
   ASSERT_NOT_NEGATIVE_INT(base, "factorial", "is equal to infinity",
                           NT_PRIM_FLT, rt->f = INFINITY);
 
@@ -220,12 +220,12 @@ NodeType fac_flt(PrimitiveFC *rt, flt_t base, flt_t step) {
   return NT_PRIM_FLT;
 }
 
-NodeType subfac_int(Primitive *rt, int_t base) {
+Node_Type subfac_int(Primitive *rt, int_t base) {
   if (base < 0)
     return subfac_flt(pm_to_pm_fc(rt), base);
 
   rt->i = 1;
-  NodeType rtt = NT_PRIM_INT;
+  Node_Type rtt = NT_PRIM_INT;
 
   int_t i = 1;
 
@@ -255,7 +255,7 @@ cmx_t gamma_lower_quo_e(flt_t s) {
   return cpow((cmx_t)-1, (cmx_t)s) * rt;
 }
 
-NodeType subfac_flt(PrimitiveFC *rt, flt_t base) {
+Node_Type subfac_flt(Primitive_F_C *rt, flt_t base) {
   ASSERT_NOT_NEGATIVE_INT(base, "subfactorial", "currently is not implemented",
                           NT_PRIM_FLT, rt->f = NAN);
 

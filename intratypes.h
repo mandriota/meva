@@ -64,7 +64,7 @@ typedef enum {
   TT_ABS,
 
   TT_EOX,
-} TokenType;
+} Token_Type;
 
 //=:parser:nodes
 
@@ -107,6 +107,6 @@ typedef enum {
   NT_FUNC,
   NT_CALL,
   NT_CALL_ANON,
-} NodeType;
+} Node_Type;
 
 #endif

@@ -179,7 +179,7 @@ char *int_stringify(char *dst, char *dst_end, int_t num);
 
 typedef union {
   cmx_t c;
-  flt_t f;
+	flt_t f;
   int_t i;
   unt_t u;
   bol_t b;
@@ -190,22 +190,22 @@ typedef union {
 typedef union {
   int_t i;
   flt_t f;
-} PrimitiveIF;
+} Primitive_I_F;
 
-static inline PrimitiveIF *pm_to_pm_if(Primitive *pm) {
-  return (PrimitiveIF *)pm;
+static inline Primitive_I_F *pm_to_pm_if(Primitive *pm) {
+  return (Primitive_I_F *)pm;
 }
 
 typedef union {
   flt_t f;
   cmx_t c;
-} PrimitiveFC;
+} Primitive_F_C;
 
-static inline PrimitiveFC *pm_to_pm_fc(Primitive *pm) {
-  return (PrimitiveFC *)pm;
+static inline Primitive_F_C *pm_to_pm_fc(Primitive *pm) {
+  return (Primitive_F_C *)pm;
 }
 
-static inline NodeType add_int(PrimitiveIF *rt, int_t a, int_t b) {
+static inline Node_Type add_int(Primitive_I_F *rt, int_t a, int_t b) {
   if ((a < 0) == (b < 0) && INT_T_MAX - ABS(a) < ABS(b)) {
     rt->f = (flt_t)a + b;
     return NT_PRIM_FLT;
@@ -215,11 +215,11 @@ static inline NodeType add_int(PrimitiveIF *rt, int_t a, int_t b) {
   return NT_PRIM_INT;
 }
 
-static inline NodeType sub_int(PrimitiveIF *rt, int_t a, int_t b) {
+static inline Node_Type sub_int(Primitive_I_F *rt, int_t a, int_t b) {
   return add_int(rt, a, -b);
 }
 
-static inline NodeType mul_int(PrimitiveIF *rt, int_t a, int_t b) {
+static inline Node_Type mul_int(Primitive_I_F *rt, int_t a, int_t b) {
   if (INT_T_MAX / b < a && b != 0) {
     rt->f = (flt_t)a * b;
     return NT_PRIM_FLT;
@@ -229,19 +229,19 @@ static inline NodeType mul_int(PrimitiveIF *rt, int_t a, int_t b) {
   return NT_PRIM_INT;
 }
 
-NodeType pow_int(PrimitiveIF *rt, int_t base, int_t expo);
+Node_Type pow_int(Primitive_I_F *rt, int_t base, int_t expo);
 
-NodeType fac_int(PrimitiveIF *rt, int_t base, int_t step);
+Node_Type fac_int(Primitive_I_F *rt, int_t base, int_t step);
 
-NodeType fac_flt(PrimitiveFC *rt, flt_t base, flt_t step);
+Node_Type fac_flt(Primitive_F_C *rt, flt_t base, flt_t step);
 
-NodeType subfac_int(Primitive *rt, int_t base);
+Node_Type subfac_int(Primitive *rt, int_t base);
 
-NodeType subfac_flt(PrimitiveFC *rt, flt_t base);
+Node_Type subfac_flt(Primitive_F_C *rt, flt_t base);
 
 //=:intratypes:stringify
 
-static inline const char *tt_stringify(TokenType tt) {
+static inline const char *tt_stringify(Token_Type tt) {
   switch (tt) {
     STRINGIFY_CASE(TT_ILL)
     STRINGIFY_CASE(TT_EOS)
@@ -277,7 +277,7 @@ static inline const char *tt_stringify(TokenType tt) {
   return STRINGIFY(INVALID_TT);
 }
 
-static inline const char *nt_stringify(NodeType nt) {
+static inline const char *nt_stringify(Node_Type nt) {
   switch (nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
     STRINGIFY_CASE(NT_PRIM_INT)
