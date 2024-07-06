@@ -71,8 +71,6 @@ _Static_assert(INTERNAL_READING_BUF_SIZE > 0,
 
 _Static_assert(NODE_BUF_SIZE > 0, "NODE_BUF_SIZE must be at least 1");
 
-//=:reader
-
 //=:reader:reader
 
 typedef struct {
@@ -157,8 +155,6 @@ void rd_skip_line(Reader *rd) {
     rd_next_char(rd);
 }
 
-//=:lexer
-
 //=:lexer:lexer
 
 typedef struct {
@@ -177,22 +173,22 @@ int_t lx_read_integer(Lexer *lx, int_t *mnt, int_t *exp) {
   bool overflow = false;
 
   while (is_digit(lx->rd.cch) && !overflow) {
-		*mnt = *mnt * 10 + lx->rd.cch - '0';
-		pow10 *= 10;
-		overflow = pow10 > INT_T_MAX / 10;
+    *mnt = *mnt * 10 + lx->rd.cch - '0';
+    pow10 *= 10;
+    overflow = pow10 > INT_T_MAX / 10;
 
-		rd_next_char(&lx->rd);
-	}
+    rd_next_char(&lx->rd);
+  }
 
-	if (!overflow)
-		return pow10;
+  if (!overflow)
+    return pow10;
 
-	while (is_digit(lx->rd.cch)) {
-		 ++*exp;
-		 rd_next_char(&lx->rd);
-	}
+  while (is_digit(lx->rd.cch)) {
+    ++*exp;
+    rd_next_char(&lx->rd);
+  }
 
-	return pow10;
+  return pow10;
 }
 
 void lx_next_token_number(Lexer *lx) {
@@ -209,8 +205,8 @@ void lx_next_token_number(Lexer *lx) {
     decimal_log10 = lx_read_integer(lx, &mnt, &exp);
     lx->pm.c += (double)mnt / decimal_log10;
   } else if (exp != 0) {
-		WARNING_INT_TO_CMX("integer overflow");
-		
+    WARNING_INT_TO_CMX("integer overflow");
+
     lx->tt = TT_CMX;
     lx->pm.c = (double)mnt * pow(10, (double)exp);
   } else {
@@ -224,12 +220,12 @@ void lx_next_token_number(Lexer *lx) {
   }
 
   if (lx->tt == TT_CMX) {
-		lx->pm.c = lx->pm.c * I;
-		return;
+    lx->pm.c = lx->pm.c * I;
+    return;
   }
 
-	lx->pm.c = lx->pm.i * I;
-	lx->tt = TT_CMX;
+  lx->pm.c = lx->pm.i * I;
+  lx->tt = TT_CMX;
 }
 
 void lx_next_token_symbol(Lexer *lx) {
@@ -315,8 +311,6 @@ void lx_next_token(Lexer *lx) {
       lx_next_token_symbol(lx);
   }
 }
-
-//=:parser
 
 //=:parser:nodes
 
@@ -1015,8 +1009,6 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src) {
 
   return IR_ERR_ILL_NT;
 }
-
-//=:user
 
 //=:user:repl
 
