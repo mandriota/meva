@@ -28,11 +28,8 @@
 *                                                                              *
 \******************************************************************************/
 
-//=:config
-
-#include "config.h"
-
 //=:includes
+#include "config.h"
 
 #include "intratypes.h"
 #include "util.h"

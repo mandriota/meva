@@ -26,7 +26,7 @@
 #include <stdint.h>
 #include <tgmath.h>
 
-//=:util
+//=:util:other
 
 ssize_t getline(char **restrict lineptr, size_t *restrict n,
                 FILE *restrict stream) {

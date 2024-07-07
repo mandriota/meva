@@ -18,8 +18,6 @@
 *                                                                              *
 \******************************************************************************/
 
-//=:config
-
 //=:config:debug
 // comment to disable debug mode
 // #define NDEBUG
