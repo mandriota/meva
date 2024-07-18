@@ -47,7 +47,7 @@ ssize_t getline(char **restrict lineptr, size_t *restrict n,
     if (cp >= *n) {
       *n *= 2;
       *lineptr = (char *)realloc(*lineptr, *n);
-      if (lineptr == NULL)
+      if (*lineptr == NULL)
         return -1;
     }
   } while (cc != '\n' && !ferror(stream));

@@ -76,31 +76,36 @@ typedef struct {
   FILE *src;
 
   size_t ptr;
-  ssize_t mrk;
-  size_t row, col;
+  size_t mrk;
+  size_t row;
+  size_t col;
 
   char cch;
 
-  bool eof, eos;
+  bool eof;
+  bool eos;
   bool eoi;
   bool prv;
 } Reader;
 
 void rd_reset_counters(Reader *rd) {
-  rd->ptr = rd->mrk = 0;
-  rd->row = rd->col = 0;
-  rd->eof = rd->eos = false;
+  rd->ptr = 0;
+  rd->mrk = 0;
+  rd->row = 0;
+  rd->col = 0;
+  rd->eof = 0;
+  rd->eos = false;
   rd->eoi = false;
   rd->prv = false;
 }
 
 void rd_prev(Reader *rd) {
-  rd->prv = rd->mrk == -1 || (size_t)rd->mrk != rd->ptr;
+  rd->prv = rd->mrk == SIZE_MAX || rd->mrk != rd->ptr;
 }
 
 void rd_next_page(Reader *rd) {
   rd->ptr = 0;
-  rd->mrk = -1;
+  rd->mrk = SIZE_MAX;
 
   if (rd->src == NULL) {
     rd->eos = rd->eof = rd->eoi;
