@@ -71,7 +71,7 @@ _Static_assert(NODE_BUF_SIZE > 0, "NODE_BUF_SIZE must be at least 1");
 //=:reader:reader
 
 typedef struct {
-  StringBuffer page;
+  String_Buffer page;
 
   FILE *src;
 
