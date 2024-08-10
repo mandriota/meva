@@ -55,6 +55,7 @@
 #else
 #define CLR_RESET
 #define CLR_ERR_MSG
+#define CLR_WRN_MSG
 #define CLR_INF_MSG
 #define CLR_PRIM
 #define CLR_INTERNAL

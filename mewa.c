@@ -232,12 +232,12 @@ void lx_next_token_number(Lexer *lx) {
 
 void lx_next_token_symbol(Lexer *lx) {
   lx->tt = TT_SYM;
-  lx->pm.u = 0;
+  lx->pm.s = 0;
 
   int bit_off = 0;
 
   while (is_letter(lx->rd.cch) || is_digit(lx->rd.cch)) {
-    lx->pm.u |= encode_symbol_c(lx->rd.cch) << bit_off;
+    lx->pm.s |= encode_symbol_c(lx->rd.cch) << bit_off;
     bit_off += 6;
     rd_next_char(&lx->rd);
   }
@@ -248,15 +248,15 @@ void lx_next_token_symbol(Lexer *lx) {
 void lx_next_token_factorial(Lexer *lx) {
   lx->tt = TT_FAC;
 
-  for (lx->pm.u = 0; lx->rd.cch == '!'; ++lx->pm.u)
+  for (lx->pm.s = 0; lx->rd.cch == '!'; ++lx->pm.s)
     rd_next_char(&lx->rd);
 
-  if (lx->pm.u == 1 && lx->rd.cch == '=') {
+  if (lx->pm.s == 1 && lx->rd.cch == '=') {
     lx->tt = TT_NEQ;
     return;
   }
 
-  if (lx->pm.u == 1)
+  if (lx->pm.s == 1)
     lx->tt = TT_NOT;
   rd_prev(&lx->rd);
 }
@@ -374,7 +374,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
 
       switch (nodes[node].type) {
       case NT_PRIM_SYM:
-        ptr = decode_symbol(dst, &dst[sizeof dst - 1], nodes[node].as.pm.u);
+        ptr = decode_symbol(dst, &dst[sizeof dst - 1], nodes[node].as.pm.s);
         ptr_off = ptr - dst;
         printf(CLR_PRIM "%.*s" CLR_RESET "\n", ptr_off, dst);
         goto while2_final;
@@ -556,7 +556,7 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
     return PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED;
   case TT_SYM:
     pr->nodes[*node].type = NT_PRIM_SYM;
-    pr->nodes[*node].as.pm.u = pr->lx.pm.u;
+    pr->nodes[*node].as.pm.s = pr->lx.pm.s;
     lx_next_token(&pr->lx);
     break;
   case TT_INT:

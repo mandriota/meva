@@ -147,19 +147,18 @@ typedef double complex cmx_t;
 #ifdef BITINT_MAXWIDTH
 typedef _BitInt(BITINT_MAXWIDTH) int_t;
 
-typedef unsigned _BitInt(BITINT_MAXWIDTH) unt_t;
+typedef unsigned _BitInt(BITINT_MAXWIDTH) sym_t;
 #else
 typedef int64_t int_t;
 
-typedef uint64_t unt_t;
+typedef uint64_t sym_t;
 #endif
 
 typedef bool bol_t;
 
-#define INT_T_MAX ((int_t)(((unt_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
+#define INT_T_MAX ((int_t)(((sym_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
 #define ENC_OFF ('Z' - 'A' + 1)
-#endif
 
 //=:util:memory
 
@@ -169,11 +168,11 @@ static inline size_t align(size_t sz, size_t alignment) {
 
 //=:util:encoding
 
-unt_t encode_symbol_c(char c);
+sym_t encode_symbol_c(char c);
 
 char decode_symbol_c(char c);
 
-char *decode_symbol(char *dst, char *dst_end, unt_t src);
+char *decode_symbol(char *dst, char *dst_end, sym_t src);
 
 //=:runtime
 
@@ -182,7 +181,7 @@ char *int_stringify(char *dst, char *dst_end, int_t num);
 typedef union {
   cmx_t c;
   int_t i;
-  unt_t u;
+  sym_t s;
   bol_t b;
 } Primitive;
 
@@ -203,7 +202,7 @@ static inline Node_Type sub_int(Primitive *rt, int_t a, int_t b) {
 }
 
 static inline Node_Type mul_int(Primitive *rt, int_t a, int_t b) {
-  if (INT_T_MAX / b < a && b != 0) {
+  if (b != 0 && INT_T_MAX / b < a) {
     rt->c = (cmx_t)a * b;
     return NT_PRIM_CMX;
   }
@@ -292,3 +291,5 @@ static inline const char *nt_stringify(Node_Type nt) {
 
   return STRINGIFY(INVALID_NT);
 }
+
+#endif

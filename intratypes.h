@@ -25,7 +25,7 @@
 
 typedef enum {
   TT_ILL = -1,
-  TT_EOS = 0,
+  TT_EOS,
 
   TT_SYM,
   TT_INT,
