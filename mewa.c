@@ -749,15 +749,15 @@ const char *ir_err_stringify(IR_ERR ir_err) {
 
 IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
 
-IR_ERR ir_unop_exec_n_int(Interpreter *ir, Node_Type op, int_t a) {
+IR_ERR ir_unop_exec_n_int(Interpreter *ir, Node_Type op, int_t nhs) {
   ir->nodes[0].type = NT_PRIM_INT;
 
   switch (op) {
     EXEC_CASE(NT_UNOP_NOP, )
     EXEC_CASE(NT_UNOP_NOT,
-              ir->nodes[0].type = subfac_int(&ir->nodes[0].as.pm, a))
-    EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.i = -a)
-    EXEC_CASE(NT_UNOP_ABS, ir->nodes[0].as.pm.i = a < 0 ? -a : a)
+              ir->nodes[0].type = subfac_int(&ir->nodes[0].as.pm, nhs))
+    EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.i = -nhs)
+    EXEC_CASE(NT_UNOP_ABS, ir->nodes[0].as.pm.i = nhs < 0 ? -nhs : nhs)
   default:
     return IR_ERR_ILL_NT;
   }
@@ -765,17 +765,17 @@ IR_ERR ir_unop_exec_n_int(Interpreter *ir, Node_Type op, int_t a) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_unop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t a) {
+IR_ERR ir_unop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
   ir->nodes[0].type = NT_PRIM_CMX;
 
   switch (op) {
     EXEC_CASE(NT_UNOP_NOP, )
     EXEC_CASE(NT_UNOP_NOT,
-              ir->nodes[0].type = subfac_cmx(&ir->nodes[0].as.pm, a))
-    EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.c = -a)
+              ir->nodes[0].type = subfac_cmx(&ir->nodes[0].as.pm, nhs))
+    EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.c = -nhs)
   case NT_UNOP_ABS:
     ir->nodes[0].type = NT_PRIM_CMX;
-    ir->nodes[0].as.pm.c = fabs(a);
+    ir->nodes[0].as.pm.c = fabs(nhs);
     break;
   default:
     return IR_ERR_ILL_NT;
@@ -784,11 +784,11 @@ IR_ERR ir_unop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t a) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_unop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t a) {
+IR_ERR ir_unop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t nhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_UNOP_NOT, ir->nodes[0].as.pm.b = !a)
+    EXEC_CASE(NT_UNOP_NOT, ir->nodes[0].as.pm.b = !nhs)
   default:
     return IR_ERR_ILL_NT;
   }
@@ -813,16 +813,17 @@ IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
   }
 }
 
-IR_ERR ir_biop_exec_cmp_n_int(Interpreter *ir, Node_Type op, int_t a, int_t b) {
+IR_ERR ir_biop_exec_cmp_n_int(Interpreter *ir, Node_Type op, int_t lhs,
+                              int_t rhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_GRE, ir->nodes[0].as.pm.b = a > b)
-    EXEC_CASE(NT_BIOP_LES, ir->nodes[0].as.pm.b = a < b)
-    EXEC_CASE(NT_BIOP_GEQ, ir->nodes[0].as.pm.b = a >= b)
-    EXEC_CASE(NT_BIOP_LEQ, ir->nodes[0].as.pm.b = a <= b)
-    EXEC_CASE(NT_BIOP_EQU, ir->nodes[0].as.pm.b = a == b)
-    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[0].as.pm.b = a != b)
+    EXEC_CASE(NT_BIOP_GRE, ir->nodes[0].as.pm.b = lhs > rhs)
+    EXEC_CASE(NT_BIOP_LES, ir->nodes[0].as.pm.b = lhs < rhs)
+    EXEC_CASE(NT_BIOP_GEQ, ir->nodes[0].as.pm.b = lhs >= rhs)
+    EXEC_CASE(NT_BIOP_LEQ, ir->nodes[0].as.pm.b = lhs <= rhs)
+    EXEC_CASE(NT_BIOP_EQU, ir->nodes[0].as.pm.b = lhs == rhs)
+    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[0].as.pm.b = lhs != rhs)
   default:
     return IR_ERR_ILL_NT;
   }
@@ -830,56 +831,57 @@ IR_ERR ir_biop_exec_cmp_n_int(Interpreter *ir, Node_Type op, int_t a, int_t b) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_n_int(Interpreter *ir, Node_Type op, int_t a, int_t b) {
+IR_ERR ir_biop_exec_n_int(Interpreter *ir, Node_Type op, int_t lhs, int_t rhs) {
   ir->nodes[0].type = NT_PRIM_INT;
 
   switch (op) {
     EXEC_CASE(NT_BIOP_ADD,
-              ir->nodes[0].type = add_int(&ir->nodes[0].as.pm, a, b))
+              ir->nodes[0].type = add_int(&ir->nodes[0].as.pm, lhs, rhs))
     EXEC_CASE(NT_BIOP_SUB,
-              ir->nodes[0].type = sub_int(&ir->nodes[0].as.pm, a, b))
+              ir->nodes[0].type = sub_int(&ir->nodes[0].as.pm, lhs, rhs))
     EXEC_CASE(NT_BIOP_MUL,
-              ir->nodes[0].type = mul_int(&ir->nodes[0].as.pm, a, b))
+              ir->nodes[0].type = mul_int(&ir->nodes[0].as.pm, lhs, rhs))
     EXEC_CASE(NT_BIOP_FAC,
-              ir->nodes[0].type = fac_int(&ir->nodes[0].as.pm, a, b))
-    EXEC_CASE(NT_BIOP_MOD, ir->nodes[0].as.pm.i = a % b)
+              ir->nodes[0].type = fac_int(&ir->nodes[0].as.pm, lhs, rhs))
+    EXEC_CASE(NT_BIOP_MOD, ir->nodes[0].as.pm.i = lhs % rhs)
   case NT_BIOP_QUO:
-    if (b == 0)
+    if (rhs == 0)
       return IR_ERR_DIV_BY_ZERO;
 
-    if (a % b != 0) {
+    if (lhs % rhs != 0) {
       ir->nodes[0].type = NT_PRIM_CMX;
-      ir->nodes[0].as.pm.c = (double)a / b;
+      ir->nodes[0].as.pm.c = (double)lhs / rhs;
     } else
-      ir->nodes[0].as.pm.i = a / b;
+      ir->nodes[0].as.pm.i = lhs / rhs;
 
     break;
   case NT_BIOP_POW:
-    if (b < 0) {
+    if (rhs < 0) {
       ir->nodes[0].type = NT_PRIM_CMX;
-      ir->nodes[0].as.pm.c = pow((double)a, (double)b);
+      ir->nodes[0].as.pm.c = pow((double)lhs, (double)rhs);
     } else
-      ir->nodes[0].type = pow_int(&ir->nodes[0].as.pm, a, b);
+      ir->nodes[0].type = pow_int(&ir->nodes[0].as.pm, lhs, rhs);
 
     break;
   default:
-    return ir_biop_exec_cmp_n_int(ir, op, a, b);
+    return ir_biop_exec_cmp_n_int(ir, op, lhs, rhs);
   }
 
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_cmp_n_cmx(Interpreter *ir, Node_Type op, cmx_t a, cmx_t b) {
+IR_ERR ir_biop_exec_cmp_n_cmx(Interpreter *ir, Node_Type op, cmx_t lhs,
+                              cmx_t rhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
   double ra, rb;
 
-  if (cimag(a) == 0 && cimag(b) == 0) {
-    ra = creal(a);
-    rb = creal(b);
-  } else if (creal(a) == 0 && creal(b) == 0) {
-    ra = cimag(a);
-    rb = cimag(b);
+  if (cimag(lhs) == 0 && cimag(rhs) == 0) {
+    ra = creal(lhs);
+    rb = creal(rhs);
+  } else if (creal(lhs) == 0 && creal(rhs) == 0) {
+    ra = cimag(lhs);
+    rb = cimag(rhs);
   } else
     return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
@@ -893,43 +895,43 @@ IR_ERR ir_biop_exec_cmp_n_cmx(Interpreter *ir, Node_Type op, cmx_t a, cmx_t b) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t a, cmx_t b) {
+IR_ERR ir_biop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
   ir->nodes[0].type = NT_PRIM_CMX;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_ADD, ir->nodes[0].as.pm.c = a + b)
-    EXEC_CASE(NT_BIOP_SUB, ir->nodes[0].as.pm.c = a - b)
-    EXEC_CASE(NT_BIOP_MUL, ir->nodes[0].as.pm.c = a * b)
-    EXEC_CASE(NT_BIOP_POW, ir->nodes[0].as.pm.c = pow(a, b))
+    EXEC_CASE(NT_BIOP_ADD, ir->nodes[0].as.pm.c = lhs + rhs)
+    EXEC_CASE(NT_BIOP_SUB, ir->nodes[0].as.pm.c = lhs - rhs)
+    EXEC_CASE(NT_BIOP_MUL, ir->nodes[0].as.pm.c = lhs * rhs)
+    EXEC_CASE(NT_BIOP_POW, ir->nodes[0].as.pm.c = pow(lhs, rhs))
     EXEC_CASE(NT_BIOP_FAC,
-              ir->nodes[0].type = fac_cmx(&ir->nodes[0].as.pm, a, b))
+              ir->nodes[0].type = fac_cmx(&ir->nodes[0].as.pm, lhs, rhs))
   case NT_BIOP_QUO:
-    if (b == 0)
+    if (rhs == 0)
       return IR_ERR_DIV_BY_ZERO;
 
-    ir->nodes[0].as.pm.c = a / b;
+    ir->nodes[0].as.pm.c = lhs / rhs;
     break;
   case NT_BIOP_MOD:
-    if (cimag(a) != 0 || cimag(b) != 0)
+    if (cimag(lhs) != 0 || cimag(rhs) != 0)
       return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
-    ir->nodes[0].as.pm.c = fmod(creal(a), creal(b));
+    ir->nodes[0].as.pm.c = fmod(creal(lhs), creal(rhs));
     break;
   default:
-    return ir_biop_exec_cmp_n_cmx(ir, op, a, b);
+    return ir_biop_exec_cmp_n_cmx(ir, op, lhs, rhs);
   }
 
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t a, bol_t b) {
+IR_ERR ir_biop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_ORR, ir->nodes[0].as.pm.b = a || b)
-    EXEC_CASE(NT_BIOP_AND, ir->nodes[0].as.pm.b = a && b)
-    EXEC_CASE(NT_BIOP_EQU, ir->nodes[0].as.pm.b = a == b)
-    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[0].as.pm.b = a != b)
+    EXEC_CASE(NT_BIOP_ORR, ir->nodes[0].as.pm.b = lhs || rhs)
+    EXEC_CASE(NT_BIOP_AND, ir->nodes[0].as.pm.b = lhs && rhs)
+    EXEC_CASE(NT_BIOP_EQU, ir->nodes[0].as.pm.b = lhs == rhs)
+    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[0].as.pm.b = lhs != rhs)
   case NT_BIOP_GRE:
   case NT_BIOP_LES:
   case NT_BIOP_GEQ:
