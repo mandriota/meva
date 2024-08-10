@@ -31,6 +31,7 @@
 //=:includes
 #include "config.h"
 
+#include "hmap.h"
 #include "intratypes.h"
 #include "util.h"
 
