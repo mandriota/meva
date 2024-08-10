@@ -729,7 +729,7 @@ typedef enum {
   IR_ERR_NUM_ARG_EXPECTED,
   IR_ERR_DIV_BY_ZERO,
   IR_ERR_NOT_DEFINED_FOR_TYPE,
-  IR_ERR_NOT_DEFINED_VARIABLE,
+  IR_ERR_NOT_DEFINED_SYMBOL,
   IR_ERR_NOT_IMPLEMENTED,
 } IR_ERR;
 
@@ -740,7 +740,7 @@ const char *ir_err_stringify(IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_NUM_ARG_EXPECTED)
     STRINGIFY_CASE(IR_ERR_DIV_BY_ZERO)
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_FOR_TYPE)
-    STRINGIFY_CASE(IR_ERR_NOT_DEFINED_VARIABLE)
+    STRINGIFY_CASE(IR_ERR_NOT_DEFINED_SYMBOL)
     STRINGIFY_CASE(IR_ERR_NOT_IMPLEMENTED)
   }
 
@@ -994,7 +994,7 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
     if (sym_exec) {
       if (!MAP_GET(ir->global, ir->global_cap,
                    (uint64_t)ir->pr->nodes[src].as.pm.s, &ir->nodes[0]))
-        return IR_ERR_NOT_DEFINED_VARIABLE;
+        return IR_ERR_NOT_DEFINED_SYMBOL;
       return IR_ERR_NOERROR;
     }
   case NT_PRIM_INT:
