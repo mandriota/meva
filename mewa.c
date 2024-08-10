@@ -945,44 +945,38 @@ IR_ERR ir_biop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t a, bol_t b) {
 IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs,
                       ir->pr->nodes[src].type != NT_BIOP_LET));
-  Node_Type node_a_type = ir->nodes[0].type;
-  Primitive node_a_value = ir->nodes[0].as.pm;
+  Node lhs = {.type = ir->nodes[0].type, .as.pm = ir->nodes[0].as.pm};
 
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
-  Node_Type node_b_type = ir->nodes[0].type;
-  Primitive node_b_value = ir->nodes[0].as.pm;
-
-  Node temp;
+  Node rhs = {.type = ir->nodes[0].type, .as.pm = ir->nodes[0].as.pm};
 
   if (ir->pr->nodes[src].type == NT_BIOP_LET) {
-    temp.type = node_b_type;
-    temp.as.pm = node_b_value;
-    MAP_SET(ir->global, ir->global_cap, (uint64_t)node_a_value.s, &temp);
+    MAP_SET(ir->global, ir->global_cap, (uint64_t)lhs.as.pm.s, &rhs);
     return IR_ERR_NOERROR;
   }
 
-  if (node_a_type == NT_PRIM_CMX && node_b_type == NT_PRIM_INT) {
-    node_b_type = NT_PRIM_CMX;
-    node_b_value.c = node_b_value.i;
-  } else if (node_a_type == NT_PRIM_INT && node_b_type == NT_PRIM_CMX) {
-    node_a_type = NT_PRIM_CMX;
-    node_a_value.c = node_a_value.i;
+  if (lhs.type == NT_PRIM_CMX && rhs.type == NT_PRIM_INT) {
+    rhs.type = NT_PRIM_CMX;
+    rhs.as.pm.c = rhs.as.pm.i;
+  } else if (lhs.type == NT_PRIM_INT && rhs.type == NT_PRIM_CMX) {
+    lhs.type = NT_PRIM_CMX;
+    lhs.as.pm.c = lhs.as.pm.i;
   }
 
-  if (node_a_type == NT_PRIM_CMX)
-    TRY(IR_ERR, ir_biop_exec_n_cmx(ir, ir->pr->nodes[src].type, node_a_value.c,
-                                   node_b_value.c));
+  if (lhs.type == NT_PRIM_CMX)
+    TRY(IR_ERR, ir_biop_exec_n_cmx(ir, ir->pr->nodes[src].type, lhs.as.pm.c,
+                                   rhs.as.pm.c));
 
-  if (node_a_type == NT_PRIM_INT)
-    TRY(IR_ERR, ir_biop_exec_n_int(ir, ir->pr->nodes[src].type, node_a_value.i,
-                                   node_b_value.i));
+  if (lhs.type == NT_PRIM_INT)
+    TRY(IR_ERR, ir_biop_exec_n_int(ir, ir->pr->nodes[src].type, lhs.as.pm.i,
+                                   rhs.as.pm.i));
 
-  if (node_a_type == NT_PRIM_BOL || node_b_type == NT_PRIM_BOL) {
-    if (node_a_type != NT_PRIM_BOL || node_b_type != NT_PRIM_BOL)
+  if (lhs.type == NT_PRIM_BOL || rhs.type == NT_PRIM_BOL) {
+    if (lhs.type != NT_PRIM_BOL || rhs.type != NT_PRIM_BOL)
       return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
-    TRY(IR_ERR, ir_biop_exec_n_bol(ir, ir->pr->nodes[src].type, node_a_value.b,
-                                   node_b_value.b));
+    TRY(IR_ERR, ir_biop_exec_n_bol(ir, ir->pr->nodes[src].type, lhs.as.pm.b,
+                                   rhs.as.pm.b));
   }
 
   return IR_ERR_NOERROR;
