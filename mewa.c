@@ -718,6 +718,8 @@ PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
 
 typedef struct {
   Parser *pr;
+  size_t global_cap;
+  Map_Entry *global;
   Node nodes[1];
 } Interpreter;
 
@@ -727,6 +729,7 @@ typedef enum {
   IR_ERR_NUM_ARG_EXPECTED,
   IR_ERR_DIV_BY_ZERO,
   IR_ERR_NOT_DEFINED_FOR_TYPE,
+  IR_ERR_NOT_DEFINED_VARIABLE,
   IR_ERR_NOT_IMPLEMENTED,
 } IR_ERR;
 
@@ -737,13 +740,14 @@ const char *ir_err_stringify(IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_NUM_ARG_EXPECTED)
     STRINGIFY_CASE(IR_ERR_DIV_BY_ZERO)
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_FOR_TYPE)
+    STRINGIFY_CASE(IR_ERR_NOT_DEFINED_VARIABLE)
     STRINGIFY_CASE(IR_ERR_NOT_IMPLEMENTED)
   }
 
   return STRINGIFY(INVALID_IR_ERR);
 }
 
-IR_ERR ir_exec(Interpreter *ir, Node_Index src);
+IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
 
 IR_ERR ir_unop_exec_n_int(Interpreter *ir, Node_Type op, int_t a) {
   ir->nodes[0].type = NT_PRIM_INT;
@@ -793,7 +797,7 @@ IR_ERR ir_unop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t a) {
 }
 
 IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
-  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.up.nhs));
+  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.up.nhs, true));
   Node_Type node_a_type = ir->nodes[0].type;
   Primitive node_a_value = ir->nodes[0].as.pm;
 
@@ -939,13 +943,23 @@ IR_ERR ir_biop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t a, bol_t b) {
 }
 
 IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
-  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs));
+  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs,
+                      ir->pr->nodes[src].type != NT_BIOP_LET));
   Node_Type node_a_type = ir->nodes[0].type;
   Primitive node_a_value = ir->nodes[0].as.pm;
 
-  ir_exec(ir, ir->pr->nodes[src].as.bp.rhs);
+  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
   Node_Type node_b_type = ir->nodes[0].type;
   Primitive node_b_value = ir->nodes[0].as.pm;
+
+  Node temp;
+
+  if (ir->pr->nodes[src].type == NT_BIOP_LET) {
+    temp.type = node_b_type;
+    temp.as.pm = node_b_value;
+    MAP_SET(ir->global, ir->global_cap, (uint64_t)node_a_value.s, &temp);
+    return IR_ERR_NOERROR;
+  }
 
   if (node_a_type == NT_PRIM_CMX && node_b_type == NT_PRIM_INT) {
     node_b_type = NT_PRIM_CMX;
@@ -974,9 +988,15 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_exec(Interpreter *ir, Node_Index src) {
+IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   switch (ir->pr->nodes[src].type) {
   case NT_PRIM_SYM:
+    if (sym_exec) {
+      if (!MAP_GET(ir->global, ir->global_cap,
+                   (uint64_t)ir->pr->nodes[src].as.pm.s, &ir->nodes[0]))
+        return IR_ERR_NOT_DEFINED_VARIABLE;
+      return IR_ERR_NOERROR;
+    }
   case NT_PRIM_INT:
   case NT_PRIM_CMX:
   case NT_PRIM_BOL:
@@ -1068,7 +1088,7 @@ _Noreturn void repl(Interpreter *ir) {
                   SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-    IR_ERR ierr = ir_exec(ir, source);
+    IR_ERR ierr = ir_exec(ir, source, true);
     if (ierr != IR_ERR_NOERROR) {
       ERROR(CLR_INTERNAL "%s" CLR_RESET " (%d)\n", ir_err_stringify(ierr),
             ierr);
@@ -1089,6 +1109,10 @@ int main(int argc, char *argv[]) {
   Interpreter ir;
   ir.pr = malloc(sizeof(Parser) + NODE_BUF_SIZE * sizeof(Node));
   assert(ir.pr != NULL && "allocation failed");
+
+  ir.global_cap = GLOBAL_SCOPE_CAPACITY;
+  ir.global =
+      (Map_Entry *)calloc(ir.global_cap, sizeof(Map_Entry) + sizeof(Node));
 
   *ir.pr = ((Parser){
       .lx.rd =
@@ -1140,7 +1164,7 @@ int main(int argc, char *argv[]) {
                 SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-  IR_ERR ierr = ir_exec(&ir, source);
+  IR_ERR ierr = ir_exec(&ir, source, true);
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
