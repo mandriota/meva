@@ -952,7 +952,7 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
   Node rhs = {.type = ir->nodes[0].type, .as.pm = ir->nodes[0].as.pm};
 
-  if (ir->pr->nodes[src].type == NT_BIOP_LET) {
+  if (ir->pr->nodes[src].type == NT_BIOP_LET && lhs.type == NT_PRIM_SYM) {
     MAP_SET(ir->global, ir->global_cap, (uint64_t)lhs.as.pm.s, &rhs);
     return IR_ERR_NOERROR;
   }
@@ -966,22 +966,22 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   }
 
   if (lhs.type == NT_PRIM_CMX)
-    TRY(IR_ERR, ir_biop_exec_n_cmx(ir, ir->pr->nodes[src].type, lhs.as.pm.c,
-                                   rhs.as.pm.c));
+    return ir_biop_exec_n_cmx(ir, ir->pr->nodes[src].type, lhs.as.pm.c,
+                              rhs.as.pm.c);
 
   if (lhs.type == NT_PRIM_INT)
-    TRY(IR_ERR, ir_biop_exec_n_int(ir, ir->pr->nodes[src].type, lhs.as.pm.i,
-                                   rhs.as.pm.i));
+    return ir_biop_exec_n_int(ir, ir->pr->nodes[src].type, lhs.as.pm.i,
+                              rhs.as.pm.i);
 
   if (lhs.type == NT_PRIM_BOL || rhs.type == NT_PRIM_BOL) {
-    if (lhs.type != NT_PRIM_BOL || rhs.type != NT_PRIM_BOL)
+    if (lhs.type != rhs.type)
       return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
-    TRY(IR_ERR, ir_biop_exec_n_bol(ir, ir->pr->nodes[src].type, lhs.as.pm.b,
-                                   rhs.as.pm.b));
+    return ir_biop_exec_n_bol(ir, ir->pr->nodes[src].type, lhs.as.pm.b,
+                              rhs.as.pm.b);
   }
 
-  return IR_ERR_NOERROR;
+  return IR_ERR_NOT_IMPLEMENTED;
 }
 
 IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
