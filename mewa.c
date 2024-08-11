@@ -198,15 +198,17 @@ void lx_next_token_number(Lexer *lx) {
   lx->tt = TT_ILL;
 
   int_t decimal_log10, mnt, exp;
-  lx_read_integer(lx, &mnt, &exp);
+  int_t integer_log10 = lx_read_integer(lx, &mnt, &exp);
 
   if (lx->rd.cch == '.') {
-    lx->tt = TT_CMX;
     rd_next_char(&lx->rd);
 
     lx->pm.c = (double)mnt * pow(10, (double)exp);
     decimal_log10 = lx_read_integer(lx, &mnt, &exp);
+    if (decimal_log10 == 1 && integer_log10 == 1)
+      return;
     lx->pm.c += (double)mnt / decimal_log10;
+    lx->tt = TT_CMX;
   } else if (exp != 0) {
     WARNING_INT_TO_CMX("integer overflow");
 
