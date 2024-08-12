@@ -721,14 +721,7 @@ PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   return false;
 }
 
-//=:interpreter
-
-typedef struct {
-  Parser *pr;
-  size_t global_cap;
-  Map_Entry *global;
-  Node nodes[1];
-} Interpreter;
+//=:interpreter:errors
 
 typedef enum {
   IR_ERR_NOERROR,
@@ -754,7 +747,18 @@ const char *ir_err_stringify(IR_ERR ir_err) {
   return STRINGIFY(INVALID_IR_ERR);
 }
 
+//=:interpreter:interpreter
+
+typedef struct {
+  Parser *pr;
+  size_t global_cap;
+  Map_Entry *global;
+  Node nodes[1];
+} Interpreter;
+
 IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
+
+//=:interpreter:unop
 
 IR_ERR ir_unop_exec_n_int(Interpreter *ir, Node_Type op, int_t nhs) {
   ir->nodes[0].type = NT_PRIM_INT;
@@ -819,6 +823,8 @@ IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
     return IR_ERR_NUM_ARG_EXPECTED;
   }
 }
+
+//=:interpreter:biop
 
 IR_ERR ir_biop_exec_cmp_n_int(Interpreter *ir, Node_Type op, int_t lhs,
                               int_t rhs) {
@@ -990,6 +996,8 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
 
   return IR_ERR_NOT_IMPLEMENTED;
 }
+
+//=:interpreter:interpreter
 
 IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   switch (ir->pr->nodes[src].type) {
