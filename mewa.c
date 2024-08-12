@@ -234,16 +234,15 @@ void lx_next_token_number(Lexer *lx) {
 }
 
 void lx_next_token_symbol(Lexer *lx) {
-  lx->tt = TT_SYM;
+  lx->tt = TT_ILL;
   lx->pm.s = 0;
 
-  unsigned bit_off = 0; // maybe replace with unsigned integer?
+  unsigned bit_off = 0;
 
   while (is_letter(lx->rd.cch) || is_digit(lx->rd.cch)) {
     lx->pm.s |= encode_symbol_c(lx->rd.cch) << bit_off;
     bit_off += 6;
     if (bit_off > SYM_T_BITSIZE) {
-      lx->tt = TT_ILL;
       ERROR("identifier is too long (> %lu)\n", SYM_T_BITSIZE / 6);
       return;
     }
@@ -251,6 +250,7 @@ void lx_next_token_symbol(Lexer *lx) {
   }
 
   rd_prev(&lx->rd);
+  lx->tt = TT_SYM;
 }
 
 void lx_next_token_factorial(Lexer *lx) {
@@ -269,21 +269,21 @@ void lx_next_token_factorial(Lexer *lx) {
   rd_prev(&lx->rd);
 }
 
-#define LX_TRY_C(c, token_type, ...)                                           \
+#define LX_TRY_C(on_success_tt, c, ...)                                        \
   {                                                                            \
     if (lx->rd.cch == c) {                                                     \
-      lx->tt = token_type;                                                     \
+      lx->tt = on_success_tt;                                                  \
       __VA_ARGS__;                                                             \
       return;                                                                  \
     }                                                                          \
   }
 
-#define LX_CONSUME_C_OR_RET_TT(failure_token_type, consumer)                   \
+#define LX_LOOKUP(on_failure_tt, consumer)                                     \
   {                                                                            \
     rd_next_char(&lx->rd);                                                     \
     consumer;                                                                  \
     rd_prev(&lx->rd);                                                          \
-    lx->tt = failure_token_type;                                               \
+    lx->tt = on_failure_tt;                                                    \
     break;                                                                     \
   }
 
@@ -306,14 +306,14 @@ void lx_next_token(Lexer *lx) {
     EXEC_CASE(';', lx->tt = TT_EOX)
     EXEC_CASE('\0', lx->tt = TT_EOS)
     EXEC_CASE('!', lx_next_token_factorial(lx))
-    EXEC_CASE('&', LX_CONSUME_C_OR_RET_TT(TT_ILL, LX_TRY_C('&', TT_AND, )))
-    EXEC_CASE('|', LX_CONSUME_C_OR_RET_TT(TT_ABS, LX_TRY_C('|', TT_ORR, )))
-    EXEC_CASE('>', LX_CONSUME_C_OR_RET_TT(TT_GRE, LX_TRY_C('=', TT_GEQ, )))
-    EXEC_CASE('<', LX_CONSUME_C_OR_RET_TT(TT_LES, LX_TRY_C('=', TT_LEQ, )))
-    EXEC_CASE('=', LX_CONSUME_C_OR_RET_TT(TT_LET, LX_TRY_C('=', TT_EQU, )))
-    EXEC_CASE('\'', LX_CONSUME_C_OR_RET_TT(
-                        TT_ILL, LX_TRY_C('f', TT_FAL, ) LX_TRY_C('t', TT_TRU, )
-                                    LX_TRY_C('i', TT_CMX, lx->pm.c = I)))
+    EXEC_CASE('&', LX_LOOKUP(TT_ILL, LX_TRY_C(TT_AND, '&', )))
+    EXEC_CASE('|', LX_LOOKUP(TT_ABS, LX_TRY_C(TT_ORR, '|', )))
+    EXEC_CASE('>', LX_LOOKUP(TT_GRE, LX_TRY_C(TT_GEQ, '=', )))
+    EXEC_CASE('<', LX_LOOKUP(TT_LES, LX_TRY_C(TT_LEQ, '=', )))
+    EXEC_CASE('=', LX_LOOKUP(TT_LET, LX_TRY_C(TT_EQU, '=', )))
+    EXEC_CASE('\'',
+              LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, 'f', ) LX_TRY_C(TT_TRU, 't', )
+                                    LX_TRY_C(TT_CMX, 'i', lx->pm.c = I)))
   default:
     if (is_digit(lx->rd.cch) || lx->rd.cch == '.') {
       lx_next_token_number(lx);
