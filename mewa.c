@@ -237,11 +237,16 @@ void lx_next_token_symbol(Lexer *lx) {
   lx->tt = TT_SYM;
   lx->pm.s = 0;
 
-  int bit_off = 0;
+  unsigned bit_off = 0; // maybe replace with unsigned integer?
 
   while (is_letter(lx->rd.cch) || is_digit(lx->rd.cch)) {
     lx->pm.s |= encode_symbol_c(lx->rd.cch) << bit_off;
     bit_off += 6;
+    if (bit_off > SYM_T_BITSIZE) {
+      lx->tt = TT_ILL;
+      ERROR("identifier is too long (> %lu)\n", SYM_T_BITSIZE / 6);
+      return;
+    }
     rd_next_char(&lx->rd);
   }
 
@@ -390,9 +395,9 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
         nd_tree_print_cmx(nodes[node].as.pm.c);
         goto while2_final;
       case NT_PRIM_BOL:
-        if (nodes[node].as.pm.b)
+        if (nodes[node].as.pm.b) {
           printf(CLR_PRIM "true\n" CLR_RESET);
-        else
+        } else
           printf(CLR_PRIM "false\n" CLR_RESET);
         goto while2_final;
       case NT_BIOP_LET:

@@ -158,6 +158,8 @@ typedef bool bol_t;
 
 #define INT_T_MAX ((int_t)(((sym_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
 
+#define SYM_T_BITSIZE (sizeof(sym_t) * 8)
+
 #define ENC_OFF ('Z' - 'A' + 1)
 
 //=:util:memory
