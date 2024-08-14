@@ -460,9 +460,9 @@ typedef enum {
   PT_SKIP_RP0,
   PT_LET0,
   PT_LET1,
+  PT_TEST,
   PT_ORR,
   PT_AND,
-  PT_CMP,
   PT_ADD_SUB,
   PT_MUL_QUO_MOD,
   PT_NOT_NOP_NEG,
@@ -476,13 +476,13 @@ bool pt_includes_tt(Priority pt, Token_Type tt) {
   switch (pt) {
   case PT_LET0:
     return tt == TT_LET;
+  case PT_TEST:
+    return tt == TT_GRE || tt == TT_LES || tt == TT_GEQ || tt == TT_LEQ ||
+           tt == TT_EQU || tt == TT_NEQ;
   case PT_ORR:
     return tt == TT_ORR;
   case PT_AND:
     return tt == TT_AND;
-  case PT_CMP:
-    return tt == TT_GRE || tt == TT_LES || tt == TT_GEQ || tt == TT_LEQ ||
-           tt == TT_EQU || tt == TT_NEQ;
   case PT_ADD_SUB:
     return tt == TT_ADD || tt == TT_SUB;
   case PT_MUL_QUO_MOD:
@@ -698,8 +698,8 @@ PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   case PT_ORR:
     return pr_next_biop_node(pr, node, PT_AND);
   case PT_AND:
-    return pr_next_biop_node(pr, node, PT_CMP);
-  case PT_CMP:
+    return pr_next_biop_node(pr, node, PT_TEST);
+  case PT_TEST:
     return pr_next_biop_node(pr, node, PT_ADD_SUB);
   case PT_ADD_SUB:
     return pr_next_biop_node(pr, node, PT_MUL_QUO_MOD);
@@ -760,7 +760,7 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
 
 //=:interpreter:unop
 
-IR_ERR ir_unop_exec_n_int(Interpreter *ir, Node_Type op, int_t nhs) {
+IR_ERR ir_unop_exec_nint(Interpreter *ir, Node_Type op, int_t nhs) {
   ir->nodes[0].type = NT_PRIM_INT;
 
   switch (op) {
@@ -776,7 +776,7 @@ IR_ERR ir_unop_exec_n_int(Interpreter *ir, Node_Type op, int_t nhs) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_unop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
+IR_ERR ir_unop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
   ir->nodes[0].type = NT_PRIM_CMX;
 
   switch (op) {
@@ -795,7 +795,7 @@ IR_ERR ir_unop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_unop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t nhs) {
+IR_ERR ir_unop_exec_bool(Interpreter *ir, Node_Type op, bol_t nhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
   switch (op) {
@@ -814,11 +814,11 @@ IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
 
   switch (node_a_type) {
   case NT_PRIM_BOL:
-    return ir_unop_exec_n_bol(ir, ir->pr->nodes[src].type, node_a_value.b);
+    return ir_unop_exec_bool(ir, ir->pr->nodes[src].type, node_a_value.b);
   case NT_PRIM_INT:
-    return ir_unop_exec_n_int(ir, ir->pr->nodes[src].type, node_a_value.i);
+    return ir_unop_exec_nint(ir, ir->pr->nodes[src].type, node_a_value.i);
   case NT_PRIM_CMX:
-    return ir_unop_exec_n_cmx(ir, ir->pr->nodes[src].type, node_a_value.c);
+    return ir_unop_exec_ncmx(ir, ir->pr->nodes[src].type, node_a_value.c);
   default:
     return IR_ERR_NUM_ARG_EXPECTED;
   }
@@ -826,7 +826,7 @@ IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
 
 //=:interpreter:biop
 
-IR_ERR ir_biop_exec_cmp_n_int(Interpreter *ir, Node_Type op, int_t lhs,
+IR_ERR ir_biop_exec_test_nint(Interpreter *ir, Node_Type op, int_t lhs,
                               int_t rhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
@@ -844,7 +844,7 @@ IR_ERR ir_biop_exec_cmp_n_int(Interpreter *ir, Node_Type op, int_t lhs,
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_n_int(Interpreter *ir, Node_Type op, int_t lhs, int_t rhs) {
+IR_ERR ir_biop_exec_nint(Interpreter *ir, Node_Type op, int_t lhs, int_t rhs) {
   ir->nodes[0].type = NT_PRIM_INT;
 
   switch (op) {
@@ -877,13 +877,13 @@ IR_ERR ir_biop_exec_n_int(Interpreter *ir, Node_Type op, int_t lhs, int_t rhs) {
 
     break;
   default:
-    return ir_biop_exec_cmp_n_int(ir, op, lhs, rhs);
+    return ir_biop_exec_test_nint(ir, op, lhs, rhs);
   }
 
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_cmp_n_cmx(Interpreter *ir, Node_Type op, cmx_t lhs,
+IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs,
                               cmx_t rhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
@@ -908,7 +908,7 @@ IR_ERR ir_biop_exec_cmp_n_cmx(Interpreter *ir, Node_Type op, cmx_t lhs,
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
+IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
   ir->nodes[0].type = NT_PRIM_CMX;
 
   switch (op) {
@@ -931,13 +931,13 @@ IR_ERR ir_biop_exec_n_cmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
     ir->nodes[0].as.pm.c = fmod(creal(lhs), creal(rhs));
     break;
   default:
-    return ir_biop_exec_cmp_n_cmx(ir, op, lhs, rhs);
+    return ir_biop_exec_test_ncmx(ir, op, lhs, rhs);
   }
 
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_biop_exec_n_bol(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
+IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
   ir->nodes[0].type = NT_PRIM_BOL;
 
   switch (op) {
@@ -979,19 +979,19 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   }
 
   if (lhs.type == NT_PRIM_CMX)
-    return ir_biop_exec_n_cmx(ir, ir->pr->nodes[src].type, lhs.as.pm.c,
-                              rhs.as.pm.c);
+    return ir_biop_exec_ncmx(ir, ir->pr->nodes[src].type, lhs.as.pm.c,
+                             rhs.as.pm.c);
 
   if (lhs.type == NT_PRIM_INT)
-    return ir_biop_exec_n_int(ir, ir->pr->nodes[src].type, lhs.as.pm.i,
-                              rhs.as.pm.i);
+    return ir_biop_exec_nint(ir, ir->pr->nodes[src].type, lhs.as.pm.i,
+                             rhs.as.pm.i);
 
   if (lhs.type == NT_PRIM_BOL || rhs.type == NT_PRIM_BOL) {
     if (lhs.type != rhs.type)
       return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
-    return ir_biop_exec_n_bol(ir, ir->pr->nodes[src].type, lhs.as.pm.b,
-                              rhs.as.pm.b);
+    return ir_biop_exec_bool(ir, ir->pr->nodes[src].type, lhs.as.pm.b,
+                             rhs.as.pm.b);
   }
 
   return IR_ERR_NOT_IMPLEMENTED;
@@ -1124,6 +1124,7 @@ int main(int argc, char *argv[]) {
   ir.global_cap = GLOBAL_SCOPE_CAPACITY;
   ir.global =
       (Map_Entry *)calloc(ir.global_cap, sizeof(Map_Entry) + sizeof(Node));
+  assert(ir.pr != NULL && "allocation failed");
 
   *ir.pr = ((Parser){
       .lx.rd =
