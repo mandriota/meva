@@ -60,7 +60,7 @@ ssize_t getline(char **restrict lineptr, size_t *restrict n,
 
 //=:util:encoding
 
-sym_t encode_symbol_c(char c) {
+char encode_symbol_c(char c) {
   if (is_upper(c))
     return (c - 'A') + 1;
   if (is_lower(c))

@@ -147,30 +147,26 @@ typedef double complex cmx_t;
 #ifdef BITINT_MAXWIDTH
 typedef _BitInt(BITINT_MAXWIDTH) int_t;
 
-typedef unsigned _BitInt(BITINT_MAXWIDTH) sym_t;
+typedef unsigned _BitInt(BITINT_MAXWIDTH) uint_t;
 #else
 typedef int64_t int_t;
 
-typedef uint64_t sym_t;
+typedef uint64_t uint_t;
 #endif
+
+typedef uint64_t sym_t;
 
 typedef bool bol_t;
 
-#define INT_T_MAX ((int_t)(((sym_t)1 << (sizeof(int_t) * 8 - 1)) - 1))
+#define INT_T_MAX ((int_t)((~(uint_t)0) / 2))
 
 #define SYM_T_BITSIZE (sizeof(sym_t) * 8)
 
 #define ENC_OFF ('Z' - 'A' + 1)
 
-//=:util:memory
-
-static inline size_t align(size_t sz, size_t alignment) {
-  return sz + (alignment - ((sz - 1) & (alignment - 1))) - 1;
-}
-
 //=:util:encoding
 
-sym_t encode_symbol_c(char c);
+char encode_symbol_c(char c);
 
 char decode_symbol_c(char c);
 
@@ -183,6 +179,7 @@ char *int_stringify(char *dst, char *dst_end, int_t num);
 typedef union {
   cmx_t c;
   int_t i;
+  uint_t u;
   sym_t s;
   bol_t b;
 } Primitive;

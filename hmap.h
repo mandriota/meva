@@ -1,3 +1,23 @@
+/******************************************************************************\
+*                                                                              *
+*    Mewa. Math EWAluator.                                                     *
+*    Copyright (C) 2024 Mark Mandriota                                         *
+*                                                                              *
+*    This program is free software: you can redistribute it and/or modify      *
+*    it under the terms of the GNU General Public License as published by      *
+*    the Free Software Foundation, either version 3 of the License, or         *
+*    (at your option) any later version.                                       *
+*                                                                              *
+*    This program is distributed in the hope that it will be useful,           *
+*    but WITHOUT ANY WARRANTY; without even the implied warranty of            *
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
+*    GNU General Public License for more details.                              *
+*                                                                              *
+*    You should have received a copy of the GNU General Public License         *
+*    along with this program.  If not, see <https://www.gnu.org/licenses/>.    *
+*                                                                              *
+\******************************************************************************/
+
 #ifndef HMAP_H
 #define HMAP_H
 
@@ -6,12 +26,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "util.h"
+//=:util:memory
+
+// align - returns aligned memory;
+/*@ requires alignment > 0;
+  @ ensures \result % alignment == 0;
+	@ ensures \result >= sz;
+	@ ensures sz % alignment == 0 ==> sz == \old(sz);
+	@ assigns \nothing;
+ */
+static inline size_t align(size_t sz, size_t alignment) {
+  return (sz + alignment - 1) & ~(alignment - 1);
+}
 
 // murmur_hash64 - returns hash of key;
-// **Returns**:
-// - 0 if key = 0;
-// - [1;2^64) if key != 0;
+/*@ ensures \result == 0 <==> key == 0;
+  @ ensures \result != 0 <==> key != 0;
+	@ assigns \nothing;
+ */
 static uint64_t murmur_hash64(uint64_t key) {
   key ^= key >> 33;
   key *= 0xff51afd7ed558ccd;
@@ -26,24 +58,26 @@ typedef struct {
   uint64_t val[];
 } Map_Entry;
 
+//@ ghost size_t entry_last = sizeof(Map_Entry) - 1;
+//@ logic integer entry_len(size_t val_sz) = 1 + ((val_sz + entry_last) & ~entry_last) / (entry_last + 1);
+
 // map_get - sets \*val to \*entries.val where key = entries.key;
-// **Defining**:
-// - T as underlying type of val and entries.val;
-// **Requires**:
-// - entries is valid;
-// - entries.key = 0 for all entries where key is not set;
-// - entries.key is unique;
-// - entries_cap != 0;
-// - entries_cap = real count of entries;
-// - key != 0;
-// - ((T\*) val) is valid;
-// - val != &entries.val where key = entries.key;
-// - val_sz = real size of (\*(\*T) val) in bytes;
-// **Modifies**:
-// - (\*(T\*) val) if key is found;
-// **Returns**:
-// - true if key is found;
-// - false if key is not found;
+/*@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
+  @ requires entries_cap != 0;
+  @ requires key != 0;
+  @ requires \valid((char*) val + (0..val_sz-1));
+  @ behavior key_found:
+	@   assumes \exists integer i;
+	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key == key;
+	@   ensures \result == true;
+	@   assigns ((char*)val)[0 .. val_sz-1];
+	@ behavior key_not_found:
+	@   assumes \forall integer i;
+	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key != key;
+	@   ensures \result == false;
+	@   assigns \nothing;
+	@ complete behaviors;
+*/
 static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
   size_t index = murmur_hash64(key) % entries_cap;
@@ -71,23 +105,24 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
   map_get(entries, cap, key, val, sizeof(*val))
 
 // map_set - sets \*entries.val to \*val where key = entries.key;
-// **Defining**:
-// - T as underlying type of val and entries.val;
-// **Requires**:
-// - entries is valid;
-// - entries.key = 0 for all entries where key is not set;
-// - entries.key is unique;
-// - entries_cap != 0;
-// - entries_cap = real count of entries;
-// - key != 0;
-// - ((T\*) val) is valid;
-// - val != &entries.val where key = entries.key;
-// - val_sz = real size of (\*(\*T) val) in bytes;
-// **Modifies**:
-// - ((T\*) entries.val) if key is found;
-// **Returns**:
-// - true if key is found;
-// - false if key is not found;
+/*@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
+  @ requires entries_cap != 0;
+  @ requires key != 0;
+  @ requires \valid((char*) val + (0 .. val_sz-1));
+	@ behavior key_found:
+	@   assumes \exists integer i;
+	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key == key ||
+	@     entries[i * entry_len(val_sz)].key == 0;
+	@   ensures \result == true;
+	@   assigns ((char*) entries[0 .. entries_cap*entry_len(val_sz) - 1].val)[0..val_sz-1];
+	@ behavior key_not_found:
+	@   assumes \forall integer i;
+	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key != key &&
+	@     entries[i * entry_len(val_sz)].key != 0;
+	@   ensures \result == false;
+	@   assigns \nothing;
+	@ complete behaviors;
+*/
 static inline bool map_set(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
   size_t index = murmur_hash64(key) % entries_cap;

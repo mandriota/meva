@@ -256,15 +256,15 @@ void lx_next_token_symbol(Lexer *lx) {
 void lx_next_token_factorial(Lexer *lx) {
   lx->tt = TT_FAC;
 
-  for (lx->pm.s = 0; lx->rd.cch == '!'; ++lx->pm.s)
+  for (lx->pm.u = 0; lx->rd.cch == '!'; ++lx->pm.u)
     rd_next_char(&lx->rd);
 
-  if (lx->pm.s == 1 && lx->rd.cch == '=') {
+  if (lx->pm.u == 1 && lx->rd.cch == '=') {
     lx->tt = TT_NEQ;
     return;
   }
 
-  if (lx->pm.s == 1)
+  if (lx->pm.u == 1)
     lx->tt = TT_NOT;
   rd_prev(&lx->rd);
 }
@@ -966,7 +966,7 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   Node rhs = {.type = ir->nodes[0].type, .as.pm = ir->nodes[0].as.pm};
 
   if (ir->pr->nodes[src].type == NT_BIOP_LET && lhs.type == NT_PRIM_SYM) {
-    MAP_SET(ir->global, ir->global_cap, (uint64_t)lhs.as.pm.s, &rhs);
+    MAP_SET(ir->global, ir->global_cap, lhs.as.pm.s, &rhs);
     return IR_ERR_NOERROR;
   }
 
@@ -1003,11 +1003,14 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   switch (ir->pr->nodes[src].type) {
   case NT_PRIM_SYM:
     if (sym_exec) {
-      if (!MAP_GET(ir->global, ir->global_cap,
-                   (uint64_t)ir->pr->nodes[src].as.pm.s, &ir->nodes[0]))
+      if (!MAP_GET(ir->global, ir->global_cap, ir->pr->nodes[src].as.pm.s,
+                   &ir->nodes[0]))
         return IR_ERR_NOT_DEFINED_SYMBOL;
       return IR_ERR_NOERROR;
     }
+    // TODO: replace with [[fallthrough]]; (supported only from c23)
+    ir->nodes[0] = ir->pr->nodes[src];
+    return IR_ERR_NOERROR;
   case NT_PRIM_INT:
   case NT_PRIM_CMX:
   case NT_PRIM_BOL:
