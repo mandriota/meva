@@ -31,10 +31,10 @@
 // align - returns aligned memory;
 /*@ requires alignment > 0;
   @ ensures \result % alignment == 0;
-	@ ensures \result >= sz;
-	@ ensures \result - sz < alignment;
-	@ ensures sz % alignment == 0 <==> sz == \old(sz);
-	@ assigns \nothing;
+  @ ensures \result >= sz;
+  @ ensures \result - sz < alignment;
+  @ ensures sz % alignment == 0 <==> sz == \old(sz);
+  @ assigns \nothing;
  */
 static inline size_t align(size_t sz, size_t alignment) {
   return (sz + alignment - 1) & ~(alignment - 1);
@@ -45,7 +45,7 @@ static inline size_t align(size_t sz, size_t alignment) {
 // murmur_hash64 - returns hash of key;
 /*@ ensures \result == 0 <==> key == 0;
   @ ensures \result != 0 <==> key != 0;
-	@ assigns \nothing;
+  @ assigns \nothing;
  */
 static uint64_t murmur_hash64(uint64_t key) {
   key ^= key >> 33;
@@ -76,16 +76,16 @@ typedef struct {
   @ requires key != 0;
   @ requires \valid((char*) val + (0..val_sz-1));
   @ behavior key_found:
-	@   assumes \exists integer i;
-	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key == key;
-	@   ensures \result == true;
-	@   assigns ((char*)val)[0 .. val_sz-1];
-	@ behavior key_not_found:
-	@   assumes \forall integer i;
-	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key != key;
-	@   ensures \result == false;
-	@   assigns \nothing;
-	@ complete behaviors;
+  @   assumes \exists integer i;
+  @     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key == key;
+  @   ensures \result == true;
+  @   assigns ((char*)val)[0 .. val_sz-1];
+  @ behavior key_not_found:
+  @   assumes \forall integer i;
+  @     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key != key;
+  @   ensures \result == false;
+  @   assigns \nothing;
+  @ complete behaviors;
 */
 static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
@@ -120,17 +120,17 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
   @ requires entries_cap != 0;
   @ requires key != 0;
   @ requires \valid((char*) val + (0 .. val_sz-1));
-	@ behavior key_found:
-	@   assumes \exists integer i;
-	@      0 <= i < entries_cap ==> is_key_match_or_empty(entries, entry_len(val_sz), i, key);
-	@   ensures \result == true;
-	@   assigns ((char*) entries[0 .. entries_cap*entry_len(val_sz) - 1].val)[0..val_sz-1];
-	@ behavior key_not_found:
-	@   assumes \forall integer i;
-	@     0 <= i < entries_cap ==> !is_key_match_or_empty(entries, entry_len(val_sz), i, key);
-	@   ensures \result == false;
-	@   assigns \nothing;
-	@ complete behaviors;
+  @ behavior key_found:
+  @   assumes \exists integer i;
+  @      0 <= i < entries_cap ==> is_key_match_or_empty(entries, entry_len(val_sz), i, key);
+  @   ensures \result == true;
+  @   assigns ((char*) entries[0 .. entries_cap*entry_len(val_sz) - 1].val)[0..val_sz-1];
+  @ behavior key_not_found:
+  @   assumes \forall integer i;
+  @     0 <= i < entries_cap ==> !is_key_match_or_empty(entries, entry_len(val_sz), i, key);
+  @   ensures \result == false;
+  @   assigns \nothing;
+  @ complete behaviors;
 */
 static inline bool map_set(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
