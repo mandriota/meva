@@ -32,7 +32,8 @@
 /*@ requires alignment > 0;
   @ ensures \result % alignment == 0;
 	@ ensures \result >= sz;
-	@ ensures sz % alignment == 0 ==> sz == \old(sz);
+	@ ensures \result - sz < alignment;
+	@ ensures sz % alignment == 0 <==> sz == \old(sz);
 	@ assigns \nothing;
  */
 static inline size_t align(size_t sz, size_t alignment) {
@@ -64,6 +65,10 @@ typedef struct {
 
 //@ ghost size_t entry_last = sizeof(Map_Entry) - 1;
 //@ logic integer entry_len(size_t val_sz) = 1 + ((val_sz + entry_last) & ~entry_last) / (entry_last + 1);
+
+/*@ predicate is_key_match_or_empty(Map_Entry *entries, integer entry_len, integer i, uint64_t key) =
+  @   entries[i * entry_len].key == key || entries[i * entry_len].key == 0;
+*/
 
 // map_get - sets \*val to \*entries.val where key = entries.key;
 /*@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
@@ -108,6 +113,8 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
 #define MAP_GET(entries, cap, key, val)                                        \
   map_get(entries, cap, key, val, sizeof(*val))
 
+#define SET_GET(entries, cap, key) map_get(entries, cap, key, NULL, 0)
+
 // map_set - sets \*entries.val to \*val where key = entries.key;
 /*@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
   @ requires entries_cap != 0;
@@ -115,14 +122,12 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
   @ requires \valid((char*) val + (0 .. val_sz-1));
 	@ behavior key_found:
 	@   assumes \exists integer i;
-	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key == key ||
-	@     entries[i * entry_len(val_sz)].key == 0;
+	@      0 <= i < entries_cap ==> is_key_match_or_empty(entries, entry_len(val_sz), i, key);
 	@   ensures \result == true;
 	@   assigns ((char*) entries[0 .. entries_cap*entry_len(val_sz) - 1].val)[0..val_sz-1];
 	@ behavior key_not_found:
 	@   assumes \forall integer i;
-	@     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key != key &&
-	@     entries[i * entry_len(val_sz)].key != 0;
+	@     0 <= i < entries_cap ==> !is_key_match_or_empty(entries, entry_len(val_sz), i, key);
 	@   ensures \result == false;
 	@   assigns \nothing;
 	@ complete behaviors;
@@ -153,5 +158,7 @@ static inline bool map_set(Map_Entry *restrict entries, size_t entries_cap,
 
 #define MAP_SET(entries, cap, key, val)                                        \
   map_set(entries, cap, key, val, sizeof(*val))
+
+#define SET_SET(entries, cap, key) map_set(entries, cap, key, NULL, 0)
 
 #endif
