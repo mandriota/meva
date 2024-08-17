@@ -39,6 +39,8 @@ static inline size_t align(size_t sz, size_t alignment) {
   return (sz + alignment - 1) & ~(alignment - 1);
 }
 
+//=:util:hash
+
 // murmur_hash64 - returns hash of key;
 /*@ ensures \result == 0 <==> key == 0;
   @ ensures \result != 0 <==> key != 0;
@@ -52,6 +54,8 @@ static uint64_t murmur_hash64(uint64_t key) {
   key ^= key >> 33;
   return key;
 }
+
+//=:hmap:hmap
 
 typedef struct {
   uint64_t key;
