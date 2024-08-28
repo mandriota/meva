@@ -94,7 +94,7 @@ void rd_reset_counters(Reader *rd) {
   rd->mrk = 0;
   rd->row = 0;
   rd->col = 0;
-  rd->eof = 0;
+  rd->eof = false;
   rd->eos = false;
   rd->eoi = false;
   rd->prv = false;

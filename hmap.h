@@ -71,13 +71,13 @@ typedef struct {
 */
 
 // map_get - sets \*val to \*entries.val where key = entries.key;
-/*@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
-  @ requires entries_cap != 0;
+/*@ requires entries_cap != 0;
+	@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
   @ requires key != 0;
   @ requires \valid((char*) val + (0..val_sz-1));
   @ behavior key_found:
   @   assumes \exists integer i;
-  @     0 <= i < entries_cap ==> entries[i * entry_len(val_sz)].key == key;
+  @     0 <= i < entries_cap && entries[i * entry_len(val_sz)].key == key;
   @   ensures \result == true;
   @   assigns ((char*)val)[0 .. val_sz-1];
   @ behavior key_not_found:
@@ -86,6 +86,7 @@ typedef struct {
   @   ensures \result == false;
   @   assigns \nothing;
   @ complete behaviors;
+	@ disjoint behaviors;
 */
 static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
@@ -116,21 +117,22 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
 #define SET_GET(entries, cap, key) map_get(entries, cap, key, NULL, 0)
 
 // map_set - sets \*entries.val to \*val where key = entries.key;
-/*@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
-  @ requires entries_cap != 0;
+/*@ requires entries_cap != 0;
+	@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
   @ requires key != 0;
   @ requires \valid((char*) val + (0 .. val_sz-1));
   @ behavior key_found:
   @   assumes \exists integer i;
-  @      0 <= i < entries_cap ==> is_key_match_or_empty(entries, entry_len(val_sz), i, key);
-  @   ensures \result == true;
+  @      0 <= i < entries_cap && is_key_match_or_empty(entries, entry_len(val_sz), i, key);
+  @   ensures \result;
   @   assigns ((char*) entries[0 .. entries_cap*entry_len(val_sz) - 1].val)[0..val_sz-1];
   @ behavior key_not_found:
   @   assumes \forall integer i;
   @     0 <= i < entries_cap ==> !is_key_match_or_empty(entries, entry_len(val_sz), i, key);
-  @   ensures \result == false;
+  @   ensures !\result;
   @   assigns \nothing;
   @ complete behaviors;
+	@ disjoint behaviors;
 */
 static inline bool map_set(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
