@@ -63,6 +63,7 @@ typedef struct {
   uint64_t val[];
 } Map_Entry;
 
+//=:hmap:get:acsl
 //@ ghost size_t entry_last = sizeof(Map_Entry) - 1;
 //@ logic integer entry_len(size_t val_sz) = 1 + ((val_sz + entry_last) & ~entry_last) / (entry_last + 1);
 
@@ -88,6 +89,7 @@ typedef struct {
   @ complete behaviors;
 	@ disjoint behaviors;
 */
+//=:hmap:get
 static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
   size_t index = murmur_hash64(key) % entries_cap;
@@ -116,6 +118,7 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
 
 #define SET_GET(entries, cap, key) map_get(entries, cap, key, NULL, 0)
 
+//=:hmap:set:acsl
 // map_set - sets \*entries.val to \*val where key = entries.key;
 /*@ requires entries_cap != 0;
 	@ requires \valid(entries + (0 .. entries_cap*entry_len(val_sz) - 1));
@@ -134,6 +137,7 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
   @ complete behaviors;
 	@ disjoint behaviors;
 */
+//=:hmap:set
 static inline bool map_set(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
   size_t index = murmur_hash64(key) % entries_cap;
