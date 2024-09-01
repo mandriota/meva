@@ -54,6 +54,8 @@ typedef enum {
 
   TT_POW,
 
+  TT_XPC,
+
   TT_NOT,
   TT_FAC,
 
@@ -61,8 +63,6 @@ typedef enum {
   TT_RP0,
 
   TT_ABS,
-
-  TT_EOX,
 } Token_Type;
 
 //=:parser:nodes
@@ -93,6 +93,8 @@ typedef enum {
   NT_BIOP_MOD = TT_MOD,
 
   NT_BIOP_POW = TT_POW,
+
+  NT_BIOP_XPC = TT_XPC,
 
   NT_BIOP_FAC = TT_FAC,
 

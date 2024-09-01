@@ -305,7 +305,7 @@ void lx_next_token(Lexer *lx) {
     EXEC_CASE('^', lx->tt = TT_POW)
     EXEC_CASE('(', lx->tt = TT_LP0)
     EXEC_CASE(')', lx->tt = TT_RP0)
-    EXEC_CASE(';', lx->tt = TT_EOX)
+    EXEC_CASE(';', lx->tt = TT_XPC)
     EXEC_CASE('\0', lx->tt = TT_EOS)
     EXEC_CASE('!', lx_next_token_factorial(lx))
     EXEC_CASE('&', LX_LOOKUP(TT_ILL, LX_TRY_C(TT_AND, '&', )))
@@ -417,6 +417,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
       case NT_BIOP_QUO:
       case NT_BIOP_MOD:
       case NT_BIOP_POW:
+      case NT_BIOP_XPC:
       case NT_BIOP_FAC:
         printf("\n");
         node_tmp = node;
@@ -460,6 +461,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
 
 typedef enum {
   PT_SKIP_RP0,
+  PT_CCX,
   PT_LET0,
   PT_LET1,
   PT_TEST,
@@ -476,6 +478,8 @@ typedef enum {
 
 bool pt_includes_tt(Priority pt, Token_Type tt) {
   switch (pt) {
+  case PT_CCX:
+    return tt == TT_XPC;
   case PT_LET0:
     return tt == TT_LET;
   case PT_TEST:
@@ -599,7 +603,7 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
     return pr_call(pr, node, pt);
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
-  case TT_EOX:
+  case TT_XPC:
     return PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED;
   default:
     return PR_ERR_TOKEN_UNEXPECTED;
@@ -692,6 +696,8 @@ PR_ERR pr_next_node(Parser *pr, Node_Index *node) {
 PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
+    return pr_next_biop_node(pr, node, PT_CCX);
+  case PT_CCX:
     return pr_next_biop_node(pr, node, PT_LET0);
   case PT_LET0:
     return pr_next_biop_node(pr, node, PT_ORR);
@@ -753,24 +759,35 @@ const char *ir_err_stringify(IR_ERR ir_err) {
 
 typedef struct {
   Parser *pr;
-  size_t global_cap;
   Map_Entry *global;
-  Node nodes[1];
+  size_t global_cap;
+  size_t nodes_ptr;
+  size_t nodes_cap;
+  Node nodes[];
 } Interpreter;
 
 IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
 
+Node_Index ir_nd_alloc(Interpreter *ir) {
+  if (ir->nodes_ptr + 1 >= ir->nodes_cap)
+    FATAL("not enough memory");
+
+  ++ir->nodes_ptr;
+  return ir->nodes_ptr - 1;
+}
+
 //=:interpreter:unop
 
 IR_ERR ir_unop_exec_nint(Interpreter *ir, Node_Type op, int_t nhs) {
-  ir->nodes[0].type = NT_PRIM_INT;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_INT;
 
   switch (op) {
     EXEC_CASE(NT_UNOP_NOP, )
-    EXEC_CASE(NT_UNOP_NOT,
-              ir->nodes[0].type = subfac_int(&ir->nodes[0].as.pm, nhs))
-    EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.i = -nhs)
-    EXEC_CASE(NT_UNOP_ABS, ir->nodes[0].as.pm.i = nhs < 0 ? -nhs : nhs)
+    EXEC_CASE(NT_UNOP_NOT, ir->nodes[ir->nodes_ptr].type =
+                               subfac_int(&ir->nodes[ir->nodes_ptr].as.pm, nhs))
+    EXEC_CASE(NT_UNOP_NEG, ir->nodes[ir->nodes_ptr].as.pm.i = -nhs)
+    EXEC_CASE(NT_UNOP_ABS,
+              ir->nodes[ir->nodes_ptr].as.pm.i = nhs < 0 ? -nhs : nhs)
   default:
     return IR_ERR_ILL_NT;
   }
@@ -779,16 +796,16 @@ IR_ERR ir_unop_exec_nint(Interpreter *ir, Node_Type op, int_t nhs) {
 }
 
 IR_ERR ir_unop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
-  ir->nodes[0].type = NT_PRIM_CMX;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_CMX;
 
   switch (op) {
     EXEC_CASE(NT_UNOP_NOP, )
-    EXEC_CASE(NT_UNOP_NOT,
-              ir->nodes[0].type = subfac_cmx(&ir->nodes[0].as.pm, nhs))
-    EXEC_CASE(NT_UNOP_NEG, ir->nodes[0].as.pm.c = -nhs)
+    EXEC_CASE(NT_UNOP_NOT, ir->nodes[ir->nodes_ptr].type =
+                               subfac_cmx(&ir->nodes[ir->nodes_ptr].as.pm, nhs))
+    EXEC_CASE(NT_UNOP_NEG, ir->nodes[ir->nodes_ptr].as.pm.c = -nhs)
   case NT_UNOP_ABS:
-    ir->nodes[0].type = NT_PRIM_CMX;
-    ir->nodes[0].as.pm.c = fabs(nhs);
+    ir->nodes[ir->nodes_ptr].type = NT_PRIM_CMX;
+    ir->nodes[ir->nodes_ptr].as.pm.c = fabs(nhs);
     break;
   default:
     return IR_ERR_ILL_NT;
@@ -798,10 +815,10 @@ IR_ERR ir_unop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
 }
 
 IR_ERR ir_unop_exec_bool(Interpreter *ir, Node_Type op, bol_t nhs) {
-  ir->nodes[0].type = NT_PRIM_BOL;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_UNOP_NOT, ir->nodes[0].as.pm.b = !nhs)
+    EXEC_CASE(NT_UNOP_NOT, ir->nodes[ir->nodes_ptr].as.pm.b = !nhs)
   default:
     return IR_ERR_ILL_NT;
   }
@@ -811,8 +828,8 @@ IR_ERR ir_unop_exec_bool(Interpreter *ir, Node_Type op, bol_t nhs) {
 
 IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.up.nhs, true));
-  Node_Type node_a_type = ir->nodes[0].type;
-  Primitive node_a_value = ir->nodes[0].as.pm;
+  Node_Type node_a_type = ir->nodes[ir->nodes_ptr].type;
+  Primitive node_a_value = ir->nodes[ir->nodes_ptr].as.pm;
 
   switch (node_a_type) {
   case NT_PRIM_BOL:
@@ -830,15 +847,15 @@ IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
 
 IR_ERR ir_biop_exec_test_nint(Interpreter *ir, Node_Type op, int_t lhs,
                               int_t rhs) {
-  ir->nodes[0].type = NT_PRIM_BOL;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_GRE, ir->nodes[0].as.pm.b = lhs > rhs)
-    EXEC_CASE(NT_BIOP_LES, ir->nodes[0].as.pm.b = lhs < rhs)
-    EXEC_CASE(NT_BIOP_GEQ, ir->nodes[0].as.pm.b = lhs >= rhs)
-    EXEC_CASE(NT_BIOP_LEQ, ir->nodes[0].as.pm.b = lhs <= rhs)
-    EXEC_CASE(NT_BIOP_EQU, ir->nodes[0].as.pm.b = lhs == rhs)
-    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[0].as.pm.b = lhs != rhs)
+    EXEC_CASE(NT_BIOP_GRE, ir->nodes[ir->nodes_ptr].as.pm.b = lhs > rhs)
+    EXEC_CASE(NT_BIOP_LES, ir->nodes[ir->nodes_ptr].as.pm.b = lhs < rhs)
+    EXEC_CASE(NT_BIOP_GEQ, ir->nodes[ir->nodes_ptr].as.pm.b = lhs >= rhs)
+    EXEC_CASE(NT_BIOP_LEQ, ir->nodes[ir->nodes_ptr].as.pm.b = lhs <= rhs)
+    EXEC_CASE(NT_BIOP_EQU, ir->nodes[ir->nodes_ptr].as.pm.b = lhs == rhs)
+    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[ir->nodes_ptr].as.pm.b = lhs != rhs)
   default:
     return IR_ERR_ILL_NT;
   }
@@ -847,35 +864,36 @@ IR_ERR ir_biop_exec_test_nint(Interpreter *ir, Node_Type op, int_t lhs,
 }
 
 IR_ERR ir_biop_exec_nint(Interpreter *ir, Node_Type op, int_t lhs, int_t rhs) {
-  ir->nodes[0].type = NT_PRIM_INT;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_INT;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_ADD,
-              ir->nodes[0].type = add_int(&ir->nodes[0].as.pm, lhs, rhs))
-    EXEC_CASE(NT_BIOP_SUB,
-              ir->nodes[0].type = sub_int(&ir->nodes[0].as.pm, lhs, rhs))
-    EXEC_CASE(NT_BIOP_MUL,
-              ir->nodes[0].type = mul_int(&ir->nodes[0].as.pm, lhs, rhs))
-    EXEC_CASE(NT_BIOP_FAC,
-              ir->nodes[0].type = fac_int(&ir->nodes[0].as.pm, lhs, rhs))
-    EXEC_CASE(NT_BIOP_MOD, ir->nodes[0].as.pm.i = lhs % rhs)
+    EXEC_CASE(NT_BIOP_ADD, ir->nodes[ir->nodes_ptr].type = add_int(
+                               &ir->nodes[ir->nodes_ptr].as.pm, lhs, rhs))
+    EXEC_CASE(NT_BIOP_SUB, ir->nodes[ir->nodes_ptr].type = sub_int(
+                               &ir->nodes[ir->nodes_ptr].as.pm, lhs, rhs))
+    EXEC_CASE(NT_BIOP_MUL, ir->nodes[ir->nodes_ptr].type = mul_int(
+                               &ir->nodes[ir->nodes_ptr].as.pm, lhs, rhs))
+    EXEC_CASE(NT_BIOP_FAC, ir->nodes[ir->nodes_ptr].type = fac_int(
+                               &ir->nodes[ir->nodes_ptr].as.pm, lhs, rhs))
+    EXEC_CASE(NT_BIOP_MOD, ir->nodes[ir->nodes_ptr].as.pm.i = lhs % rhs)
   case NT_BIOP_QUO:
     if (rhs == 0)
       return IR_ERR_DIV_BY_ZERO;
 
     if (lhs % rhs != 0) {
-      ir->nodes[0].type = NT_PRIM_CMX;
-      ir->nodes[0].as.pm.c = (double)lhs / rhs;
+      ir->nodes[ir->nodes_ptr].type = NT_PRIM_CMX;
+      ir->nodes[ir->nodes_ptr].as.pm.c = (double)lhs / rhs;
     } else
-      ir->nodes[0].as.pm.i = lhs / rhs;
+      ir->nodes[ir->nodes_ptr].as.pm.i = lhs / rhs;
 
     break;
   case NT_BIOP_POW:
     if (rhs < 0) {
-      ir->nodes[0].type = NT_PRIM_CMX;
-      ir->nodes[0].as.pm.c = pow((double)lhs, (double)rhs);
+      ir->nodes[ir->nodes_ptr].type = NT_PRIM_CMX;
+      ir->nodes[ir->nodes_ptr].as.pm.c = pow((double)lhs, (double)rhs);
     } else
-      ir->nodes[0].type = pow_int(&ir->nodes[0].as.pm, lhs, rhs);
+      ir->nodes[ir->nodes_ptr].type =
+          pow_int(&ir->nodes[ir->nodes_ptr].as.pm, lhs, rhs);
 
     break;
   default:
@@ -887,7 +905,7 @@ IR_ERR ir_biop_exec_nint(Interpreter *ir, Node_Type op, int_t lhs, int_t rhs) {
 
 IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs,
                               cmx_t rhs) {
-  ir->nodes[0].type = NT_PRIM_BOL;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_BOL;
 
   double ra, rb;
 
@@ -901,8 +919,8 @@ IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs,
     return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_GRE, ir->nodes[0].as.pm.b = ra > rb)
-    EXEC_CASE(NT_BIOP_LES, ir->nodes[0].as.pm.b = ra < rb)
+    EXEC_CASE(NT_BIOP_GRE, ir->nodes[ir->nodes_ptr].as.pm.b = ra > rb)
+    EXEC_CASE(NT_BIOP_LES, ir->nodes[ir->nodes_ptr].as.pm.b = ra < rb)
   default:
     return IR_ERR_ILL_NT;
   }
@@ -911,26 +929,26 @@ IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs,
 }
 
 IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
-  ir->nodes[0].type = NT_PRIM_CMX;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_CMX;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_ADD, ir->nodes[0].as.pm.c = lhs + rhs)
-    EXEC_CASE(NT_BIOP_SUB, ir->nodes[0].as.pm.c = lhs - rhs)
-    EXEC_CASE(NT_BIOP_MUL, ir->nodes[0].as.pm.c = lhs * rhs)
-    EXEC_CASE(NT_BIOP_POW, ir->nodes[0].as.pm.c = pow(lhs, rhs))
-    EXEC_CASE(NT_BIOP_FAC,
-              ir->nodes[0].type = fac_cmx(&ir->nodes[0].as.pm, lhs, rhs))
+    EXEC_CASE(NT_BIOP_ADD, ir->nodes[ir->nodes_ptr].as.pm.c = lhs + rhs)
+    EXEC_CASE(NT_BIOP_SUB, ir->nodes[ir->nodes_ptr].as.pm.c = lhs - rhs)
+    EXEC_CASE(NT_BIOP_MUL, ir->nodes[ir->nodes_ptr].as.pm.c = lhs * rhs)
+    EXEC_CASE(NT_BIOP_POW, ir->nodes[ir->nodes_ptr].as.pm.c = pow(lhs, rhs))
+    EXEC_CASE(NT_BIOP_FAC, ir->nodes[ir->nodes_ptr].type = fac_cmx(
+                               &ir->nodes[ir->nodes_ptr].as.pm, lhs, rhs))
   case NT_BIOP_QUO:
     if (rhs == 0)
       return IR_ERR_DIV_BY_ZERO;
 
-    ir->nodes[0].as.pm.c = lhs / rhs;
+    ir->nodes[ir->nodes_ptr].as.pm.c = lhs / rhs;
     break;
   case NT_BIOP_MOD:
     if (cimag(lhs) != 0 || cimag(rhs) != 0)
       return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
-    ir->nodes[0].as.pm.c = fmod(creal(lhs), creal(rhs));
+    ir->nodes[ir->nodes_ptr].as.pm.c = fmod(creal(lhs), creal(rhs));
     break;
   default:
     return ir_biop_exec_test_ncmx(ir, op, lhs, rhs);
@@ -940,13 +958,13 @@ IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
 }
 
 IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
-  ir->nodes[0].type = NT_PRIM_BOL;
+  ir->nodes[ir->nodes_ptr].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_ORR, ir->nodes[0].as.pm.b = lhs || rhs)
-    EXEC_CASE(NT_BIOP_AND, ir->nodes[0].as.pm.b = lhs && rhs)
-    EXEC_CASE(NT_BIOP_EQU, ir->nodes[0].as.pm.b = lhs == rhs)
-    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[0].as.pm.b = lhs != rhs)
+    EXEC_CASE(NT_BIOP_ORR, ir->nodes[ir->nodes_ptr].as.pm.b = lhs || rhs)
+    EXEC_CASE(NT_BIOP_AND, ir->nodes[ir->nodes_ptr].as.pm.b = lhs && rhs)
+    EXEC_CASE(NT_BIOP_EQU, ir->nodes[ir->nodes_ptr].as.pm.b = lhs == rhs)
+    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[ir->nodes_ptr].as.pm.b = lhs != rhs)
   case NT_BIOP_GRE:
   case NT_BIOP_LES:
   case NT_BIOP_GEQ:
@@ -962,10 +980,21 @@ IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
 IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs,
                       ir->pr->nodes[src].type != NT_BIOP_LET));
-  Node lhs = {.type = ir->nodes[0].type, .as.pm = ir->nodes[0].as.pm};
+  Node lhs = {.type = ir->nodes[ir->nodes_ptr].type,
+              .as.pm = ir->nodes[ir->nodes_ptr].as.pm};
+
+  if (ir->pr->nodes[src].type == NT_BIOP_XPC)
+    ir_nd_alloc(ir);
 
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
-  Node rhs = {.type = ir->nodes[0].type, .as.pm = ir->nodes[0].as.pm};
+  Node rhs = {.type = ir->nodes[ir->nodes_ptr].type,
+              .as.pm = ir->nodes[ir->nodes_ptr].as.pm};
+
+  if (ir->pr->nodes[src].type == NT_BIOP_XPC)
+    return IR_ERR_NOERROR;
+
+  if (ir->nodes_ptr != 0)
+    return IR_ERR_NOT_IMPLEMENTED;
 
   if (ir->pr->nodes[src].type == NT_BIOP_LET && lhs.type == NT_PRIM_SYM) {
     MAP_SET(ir->global, ir->global_cap, lhs.as.pm.s, &rhs);
@@ -1006,17 +1035,17 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_PRIM_SYM:
     if (sym_exec) {
       if (!MAP_GET(ir->global, ir->global_cap, ir->pr->nodes[src].as.pm.s,
-                   &ir->nodes[0]))
+                   &ir->nodes[ir->nodes_ptr]))
         return IR_ERR_NOT_DEFINED_SYMBOL;
       return IR_ERR_NOERROR;
     }
     // TODO: replace with [[fallthrough]]; (supported only from c23)
-    ir->nodes[0] = ir->pr->nodes[src];
+    ir->nodes[ir->nodes_ptr] = ir->pr->nodes[src];
     return IR_ERR_NOERROR;
   case NT_PRIM_INT:
   case NT_PRIM_CMX:
   case NT_PRIM_BOL:
-    ir->nodes[0] = ir->pr->nodes[src];
+    ir->nodes[ir->nodes_ptr] = ir->pr->nodes[src];
     return IR_ERR_NOERROR;
   case NT_UNOP_NOT:
   case NT_UNOP_NOP:
@@ -1038,6 +1067,7 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_BIOP_QUO:
   case NT_BIOP_MOD:
   case NT_BIOP_POW:
+  case NT_BIOP_XPC:
   case NT_BIOP_FAC:
     return ir_biop_exec(ir, src);
   case NT_FUNC:
@@ -1064,6 +1094,7 @@ _Noreturn void repl(Interpreter *ir) {
       free(ir->pr->lx.rd.page.data);
 #endif
 
+    ir->nodes_ptr = 0;
     rd_reset_counters(&ir->pr->lx.rd);
     ir->pr->p0c = 0;
     ir->pr->abs = false;
@@ -1111,9 +1142,11 @@ _Noreturn void repl(Interpreter *ir) {
       continue;
     }
 
-    printf(REPL_RESULT_PREFIX);
-    nd_tree_print(ir->nodes, 0, RESULT_INDENTATION,
-                  RESULT_INDENTATION + RESULT_MAX_DEPTH);
+    for (size_t i = 0; i <= ir->nodes_ptr; ++i) {
+      printf(REPL_RESULT_PREFIX);
+      nd_tree_print(ir->nodes, i, RESULT_INDENTATION,
+                    RESULT_INDENTATION + RESULT_MAX_DEPTH);
+    }
 
     printf(REPL_RESULT_SUFFIX);
   }
@@ -1122,16 +1155,21 @@ _Noreturn void repl(Interpreter *ir) {
 //=:user:main
 
 int main(int argc, char *argv[]) {
-  Interpreter ir;
-  ir.pr = malloc(sizeof(Parser) + NODE_BUF_SIZE * sizeof(Node));
-  assert(ir.pr != NULL && "allocation failed");
+  Interpreter *ir = malloc(sizeof(Interpreter) + NODE_BUF_SIZE * sizeof(Node));
+  assert(ir != NULL && "allocation failed");
 
-  ir.global_cap = GLOBAL_SCOPE_CAPACITY;
-  ir.global =
-      (Map_Entry *)calloc(ir.global_cap, sizeof(Map_Entry) + sizeof(Node));
-  assert(ir.pr != NULL && "allocation failed");
+  ir->nodes_cap = NODE_BUF_SIZE;
+  ir->nodes_ptr = 0;
 
-  *ir.pr = ((Parser){
+  ir->pr = malloc(sizeof(Parser) + NODE_BUF_SIZE * sizeof(Node));
+  assert(ir->pr != NULL && "allocation failed");
+
+  ir->global_cap = GLOBAL_SCOPE_CAPACITY;
+  ir->global =
+      (Map_Entry *)calloc(ir->global_cap, sizeof(Map_Entry) + sizeof(Node));
+  assert(ir->pr != NULL && "allocation failed");
+
+  *ir->pr = ((Parser){
       .lx.rd =
           {
               .src = NULL,
@@ -1149,51 +1187,51 @@ int main(int argc, char *argv[]) {
   });
 
   if (isatty(STDIN_FILENO) && argc == 1)
-    repl(&ir);
+    repl(ir);
 
   if (argc > 2)
     FATAL("too many arguments\n");
 
   if (argc == 2) {
-    ir.pr->lx.rd.page.len = ir.pr->lx.rd.page.cap = strlen(argv[1]);
-    ir.pr->lx.rd.page.data = argv[1];
+    ir->pr->lx.rd.page.len = ir->pr->lx.rd.page.cap = strlen(argv[1]);
+    ir->pr->lx.rd.page.data = argv[1];
   } else {
-    ir.pr->lx.rd.src = stdin;
+    ir->pr->lx.rd.src = stdin;
 
-    ir.pr->lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
-    ir.pr->lx.rd.page.data =
-        (char *)malloc(ir.pr->lx.rd.page.cap * sizeof(char));
-    assert(ir.pr->lx.rd.page.data != NULL && "allocation failed");
+    ir->pr->lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
+    ir->pr->lx.rd.page.data =
+        (char *)malloc(ir->pr->lx.rd.page.cap * sizeof(char));
+    assert(ir->pr->lx.rd.page.data != NULL && "allocation failed");
   }
 
-  rd_reset_counters(&ir.pr->lx.rd);
+  rd_reset_counters(&ir->pr->lx.rd);
 
   Node_Index source = 0;
 
-  PR_ERR perr = pr_next_node(ir.pr, &source);
+  PR_ERR perr = pr_next_node(ir->pr, &source);
   if (perr != PR_ERR_NOERROR)
-    FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", ir.pr->lx.rd.row,
-          ir.pr->lx.rd.col, pr_err_stringify(perr), perr,
-          tt_stringify(ir.pr->lx.tt), ir.pr->lx.tt);
+    FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", ir->pr->lx.rd.row,
+          ir->pr->lx.rd.col, pr_err_stringify(perr), perr,
+          tt_stringify(ir->pr->lx.tt), ir->pr->lx.tt);
 
 #ifndef NDEBUG
-  nd_tree_print(ir.pr->nodes, source, SOURCE_INDENTATION,
+  nd_tree_print(ir->pr->nodes, source, SOURCE_INDENTATION,
                 SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-  IR_ERR ierr = ir_exec(&ir, source, true);
+  IR_ERR ierr = ir_exec(ir, source, true);
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
   printf(PIPE_RESULT_PREFIX);
-  nd_tree_print(ir.nodes, 0, RESULT_INDENTATION,
+  nd_tree_print(ir->nodes, 0, RESULT_INDENTATION,
                 RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
   printf(PIPE_RESULT_SUFFIX);
 
-  if (ir.pr->lx.rd.src != NULL)
-    free(ir.pr->lx.rd.page.data);
-  free(ir.pr);
+  if (ir->pr->lx.rd.src != NULL)
+    free(ir->pr->lx.rd.page.data);
+  free(ir->pr);
 
   return EXIT_SUCCESS;
 }
