@@ -461,7 +461,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
 
 typedef enum {
   PT_SKIP_RP0,
-  PT_CCX,
+  PT_XPC,
   PT_LET0,
   PT_LET1,
   PT_TEST,
@@ -478,7 +478,7 @@ typedef enum {
 
 bool pt_includes_tt(Priority pt, Token_Type tt) {
   switch (pt) {
-  case PT_CCX:
+  case PT_XPC:
     return tt == TT_XPC;
   case PT_LET0:
     return tt == TT_LET;
@@ -516,7 +516,6 @@ typedef enum {
   PR_ERR_PAREN_NOT_CLOSED,
   PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED,
   PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED,
-  PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED,
   PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED,
   PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED,
   PR_ERR_TOKEN_UNEXPECTED,
@@ -530,7 +529,6 @@ const char *pr_err_stringify(PR_ERR pr_err) {
     STRINGIFY_CASE(PR_ERR_PAREN_NOT_CLOSED)
     STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED)
-    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_TOKEN_UNEXPECTED)
@@ -603,8 +601,6 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
     return pr_call(pr, node, pt);
   case TT_RP0:
     return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
-  case TT_XPC:
-    return PR_ERR_ARGUMENT_EXPECTED_END_OF_EXPRESSION_UNEXPECTED;
   default:
     return PR_ERR_TOKEN_UNEXPECTED;
   }
@@ -696,8 +692,8 @@ PR_ERR pr_next_node(Parser *pr, Node_Index *node) {
 PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   switch (pt) {
   case PT_SKIP_RP0:
-    return pr_next_biop_node(pr, node, PT_CCX);
-  case PT_CCX:
+    return pr_next_biop_node(pr, node, PT_XPC);
+  case PT_XPC:
     return pr_next_biop_node(pr, node, PT_LET0);
   case PT_LET0:
     return pr_next_biop_node(pr, node, PT_ORR);
