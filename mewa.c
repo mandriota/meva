@@ -672,6 +672,9 @@ PR_ERR pr_next_node(Parser *pr, Node_Index *node) {
   lx_next_token(&pr->lx);
   TRY(PR_ERR, pr_call(pr, node, 0));
 
+  if (pr->p0c != 0)
+    return PR_ERR_PAREN_NOT_CLOSED;
+
   return PR_ERR_NOERROR;
 }
 
@@ -1109,6 +1112,14 @@ _Noreturn void repl(Interpreter *ir) {
       continue;
     }
 
+    if (ir->pr->lx.tt != TT_EOS) {
+      ERROR("%zu:%zu: " CLR_INTERNAL "PR_ERR_UNEXPECTED_EXPRESSION" CLR_RESET
+            "\n",
+            ir->pr->lx.rd.row, ir->pr->lx.rd.col);
+      ERROR(CLR_INF_MSG "consider adding ';' between expressions\n" CLR_RESET);
+      continue;
+    }
+
 #ifndef NDEBUG
     nd_tree_print(ir->pr->nodes, source, SOURCE_INDENTATION,
                   SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
@@ -1192,6 +1203,14 @@ int main(int argc, char *argv[]) {
     FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", ir->pr->lx.rd.row,
           ir->pr->lx.rd.col, pr_err_stringify(perr), perr,
           tt_stringify(ir->pr->lx.tt), ir->pr->lx.tt);
+
+  if (ir->pr->lx.tt != TT_EOS) {
+    ERROR("%zu:%zu: " CLR_INTERNAL "PR_ERR_UNEXPECTED_EXPRESSION" CLR_RESET
+          "\n",
+          ir->pr->lx.rd.row, ir->pr->lx.rd.col);
+    ERROR(CLR_INF_MSG "consider adding ';' between expressions\n" CLR_RESET);
+    exit(1);
+  }
 
 #ifndef NDEBUG
   nd_tree_print(ir->pr->nodes, source, SOURCE_INDENTATION,
