@@ -514,10 +514,6 @@ typedef enum {
   PR_ERR_GENERAL,
   PR_ERR_PAREN_NOT_OPENED,
   PR_ERR_PAREN_NOT_CLOSED,
-  PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED,
-  PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED,
-  PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED,
-  PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED,
   PR_ERR_TOKEN_UNEXPECTED,
 } PR_ERR;
 
@@ -527,10 +523,6 @@ const char *pr_err_stringify(PR_ERR pr_err) {
     STRINGIFY_CASE(PR_ERR_GENERAL)
     STRINGIFY_CASE(PR_ERR_PAREN_NOT_OPENED)
     STRINGIFY_CASE(PR_ERR_PAREN_NOT_CLOSED)
-    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED)
-    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED)
-    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED)
-    STRINGIFY_CASE(PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED)
     STRINGIFY_CASE(PR_ERR_TOKEN_UNEXPECTED)
   }
 
@@ -562,10 +554,6 @@ PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt);
 
 PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
   switch (pr->lx.tt) {
-  case TT_ILL:
-    return PR_ERR_ARGUMENT_EXPECTED_ILLEGAL_TOKEN_UNEXPECTED;
-  case TT_EOS:
-    return PR_ERR_ARGUMENT_EXPECTED_END_OF_STREAM_UNEXPECTED;
   case TT_SYM:
     pr->nodes[*node].type = NT_PRIM_SYM;
     pr->nodes[*node].as.pm.s = pr->lx.pm.s;
@@ -589,7 +577,7 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
     break;
   case TT_ABS:
     if (pr->abs)
-      return PR_ERR_ARGUMENT_EXPECTED_ABSOLUTE_UNEXPECTED;
+      return PR_ERR_TOKEN_UNEXPECTED;
     pr->abs = true;
     pr->nodes[*node].type = NT_UNOP_ABS;
     pr->nodes[*node].as.up.nhs = pr_nd_alloc(pr);
@@ -599,8 +587,6 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
     ++pr->p0c;
     lx_next_token(&pr->lx);
     return pr_call(pr, node, pt);
-  case TT_RP0:
-    return PR_ERR_ARGUMENT_EXPECTED_RIGHT_PAREN_UNEXPECTED;
   default:
     return PR_ERR_TOKEN_UNEXPECTED;
   }
