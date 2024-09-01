@@ -993,9 +993,6 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   if (ir->pr->nodes[src].type == NT_BIOP_XPC)
     return IR_ERR_NOERROR;
 
-  if (ir->nodes_ptr != 0)
-    return IR_ERR_NOT_IMPLEMENTED;
-
   if (ir->pr->nodes[src].type == NT_BIOP_LET && lhs.type == NT_PRIM_SYM) {
     MAP_SET(ir->global, ir->global_cap, lhs.as.pm.s, &rhs);
     return IR_ERR_NOERROR;
@@ -1223,11 +1220,13 @@ int main(int argc, char *argv[]) {
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
-  printf(PIPE_RESULT_PREFIX);
-  nd_tree_print(ir->nodes, 0, RESULT_INDENTATION,
-                RESULT_INDENTATION + RESULT_MAX_DEPTH);
+  for (size_t i = 0; i <= ir->nodes_ptr; ++i) {
+    printf(REPL_RESULT_PREFIX);
+    nd_tree_print(ir->nodes, i, RESULT_INDENTATION,
+                  RESULT_INDENTATION + RESULT_MAX_DEPTH);
+  }
 
-  printf(PIPE_RESULT_SUFFIX);
+  printf(REPL_RESULT_SUFFIX);
 
   if (ir->pr->lx.rd.src != NULL)
     free(ir->pr->lx.rd.page.data);
