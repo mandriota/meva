@@ -55,6 +55,7 @@ typedef enum {
   TT_POW,
 
   TT_XPC,
+  TT_SPZ,
 
   TT_NOT,
   TT_FAC,
@@ -95,6 +96,7 @@ typedef enum {
   NT_BIOP_POW = TT_POW,
 
   NT_BIOP_XPC = TT_XPC,
+  NT_BIOP_SPZ = TT_SPZ,
 
   NT_BIOP_FAC = TT_FAC,
 
@@ -104,9 +106,7 @@ typedef enum {
   NT_UNOP_NOP,
   NT_UNOP_NEG,
 
-  NT_FUNC,
   NT_CALL,
-  NT_CALL_ANON,
 } Node_Type;
 
 #endif

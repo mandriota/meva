@@ -298,7 +298,7 @@ void lx_next_token(Lexer *lx) {
 
   switch (lx->rd.cch) {
     EXEC_CASE('+', lx->tt = TT_ADD)
-    EXEC_CASE('-', lx->tt = TT_SUB)
+    EXEC_CASE('-', LX_LOOKUP(lx->tt = TT_SUB, LX_TRY_C(TT_SPZ, '>', )))
     EXEC_CASE('*', lx->tt = TT_MUL)
     EXEC_CASE('/', lx->tt = TT_QUO)
     EXEC_CASE('%', lx->tt = TT_MOD)
@@ -418,6 +418,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
       case NT_BIOP_MOD:
       case NT_BIOP_POW:
       case NT_BIOP_XPC:
+      case NT_BIOP_SPZ:
       case NT_BIOP_FAC:
         printf("\n");
         node_tmp = node;
@@ -435,9 +436,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
         node = nodes[node].as.up.nhs;
         ++depth;
         continue;
-      case NT_FUNC:
       case NT_CALL:
-      case NT_CALL_ANON:
         FATAL("currently not implimented\n");
       }
     }
@@ -465,6 +464,8 @@ typedef enum {
   PT_LET0,
   PT_LET1,
   PT_TEST,
+  PT_SPZ0,
+  PT_SPZ1,
   PT_ORR,
   PT_AND,
   PT_ADD_SUB,
@@ -482,6 +483,8 @@ bool pt_includes_tt(Priority pt, Token_Type tt) {
     return tt == TT_XPC;
   case PT_LET0:
     return tt == TT_LET;
+  case PT_SPZ0:
+    return tt == TT_SPZ;
   case PT_TEST:
     return tt == TT_GRE || tt == TT_LES || tt == TT_GEQ || tt == TT_LEQ ||
            tt == TT_EQU || tt == TT_NEQ;
@@ -505,7 +508,9 @@ bool pt_includes_tt(Priority pt, Token_Type tt) {
   }
 }
 
-bool pt_rl_biop(Priority pt) { return pt == PT_LET0 || pt == PT_POW0; }
+bool pt_rl_biop(Priority pt) {
+  return pt == PT_LET0 || pt == PT_SPZ0 || pt == PT_POW0;
+}
 
 //=:parser:errors
 
@@ -685,9 +690,13 @@ PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   case PT_XPC:
     return pr_next_biop_node(pr, node, PT_LET0);
   case PT_LET0:
-    return pr_next_biop_node(pr, node, PT_ORR);
+    return pr_next_biop_node(pr, node, PT_SPZ0);
   case PT_LET1:
     return pr_next_biop_node(pr, node, PT_LET0);
+  case PT_SPZ0:
+    return pr_next_biop_node(pr, node, PT_ORR);
+  case PT_SPZ1:
+    return pr_next_biop_node(pr, node, PT_SPZ0);
   case PT_ORR:
     return pr_next_biop_node(pr, node, PT_AND);
   case PT_AND:
@@ -1050,11 +1059,10 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_BIOP_MOD:
   case NT_BIOP_POW:
   case NT_BIOP_XPC:
+  case NT_BIOP_SPZ:
   case NT_BIOP_FAC:
     return ir_biop_exec(ir, src);
-  case NT_FUNC:
   case NT_CALL:
-  case NT_CALL_ANON:
     return IR_ERR_NOT_IMPLEMENTED;
   }
 
