@@ -1111,7 +1111,7 @@ _Noreturn void repl(Interpreter *ir) {
 #endif
 
     PR_ERR perr = pr_next_node(ir->pr, &source);
-    if (perr != PR_ERR_NOERROR) {
+    if (perr != PR_ERR_NOERROR && perr != PR_ERR_PAREN_NOT_CLOSED) {
       ERROR("%zu:%zu: " CLR_INTERNAL "%s" CLR_RESET
             " (%d) [token: " CLR_INTERNAL "%s" CLR_RESET " (%d)]\n",
             ir->pr->lx.rd.row, ir->pr->lx.rd.col, pr_err_stringify(perr), perr,
