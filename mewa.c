@@ -348,18 +348,6 @@ struct Node {
   } as;
 };
 
-//=:parser:nodes:allocator
-
-Node_Index nd_alloc(Node_Index *len, Node_Index cap) {
-  if (*len + 1 >= cap)
-    FATAL("not enough memory");
-
-  ++*len;
-  return *len - 1;
-}
-
-//=:parser:nodes:io
-
 typedef struct {
   Node_Index node;
   Node_Index depth;
@@ -532,6 +520,7 @@ typedef enum {
   PR_ERR_PAREN_NOT_OPENED,
   PR_ERR_PAREN_NOT_CLOSED,
   PR_ERR_TOKEN_UNEXPECTED,
+  PR_ERR_MEMORY_NOT_ENOUGH,
 } PR_ERR;
 
 const char *pr_err_stringify(PR_ERR pr_err) {
@@ -541,6 +530,7 @@ const char *pr_err_stringify(PR_ERR pr_err) {
     STRINGIFY_CASE(PR_ERR_PAREN_NOT_OPENED)
     STRINGIFY_CASE(PR_ERR_PAREN_NOT_CLOSED)
     STRINGIFY_CASE(PR_ERR_TOKEN_UNEXPECTED)
+    STRINGIFY_CASE(PR_ERR_MEMORY_NOT_ENOUGH)
   }
 
   return STRINGIFY(INVALID_PR_ERR);
@@ -558,6 +548,15 @@ typedef struct {
   Node_Index nodes_cap;
   Node nodes[];
 } Parser;
+
+PR_ERR pr_nd_alloc(Parser *pr, Node_Index ptr[static 1]) {
+  if (pr->nodes_len + 1 >= pr->nodes_cap)
+    return PR_ERR_MEMORY_NOT_ENOUGH;
+
+  ptr[0] = pr->nodes_len;
+  ++pr->nodes_len;
+  return PR_ERR_NOERROR;
+}
 
 PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt);
 
@@ -589,7 +588,7 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
       return PR_ERR_TOKEN_UNEXPECTED;
     pr->abs = true;
     pr->nodes[*node].type = NT_UNOP_ABS;
-    pr->nodes[*node].as.up.nhs = nd_alloc(&pr->nodes_len, pr->nodes_cap);
+    TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[*node].as.up.nhs));
     lx_next_token(&pr->lx);
     return pr_call(pr, &pr->nodes[*node].as.up.nhs, pt);
   case TT_LP0:
@@ -609,7 +608,7 @@ PR_ERR pr_next_unop_node(Parser *pr, Node_Index *node, Priority pt) {
                             NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
                             NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
 
-    pr->nodes[*node].as.up.nhs = nd_alloc(&pr->nodes_len, pr->nodes_cap);
+    TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[*node].as.up.nhs));
 
     lx_next_token(&pr->lx);
 
@@ -625,10 +624,10 @@ PR_ERR pr_next_biop_node(Parser *pr, Node_Index *node, Priority pt) {
   Node_Index node_tmp;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
-    node_tmp = nd_alloc(&pr->nodes_len, pr->nodes_cap);
+    TRY(PR_ERR, pr_nd_alloc(pr, &node_tmp));
     pr->nodes[node_tmp].type = (Node_Type)pr->lx.tt;
     pr->nodes[node_tmp].as.bp.lhs = *node;
-    pr->nodes[node_tmp].as.bp.rhs = nd_alloc(&pr->nodes_len, pr->nodes_cap);
+    TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[node_tmp].as.bp.rhs));
 
     lx_next_token(&pr->lx);
     TRY(PR_ERR,
@@ -643,17 +642,16 @@ PR_ERR pr_next_biop_node(Parser *pr, Node_Index *node, Priority pt) {
 PR_ERR pr_next_biop_fact_node(Parser *pr, Node_Index *node, Priority pt) {
   TRY(PR_ERR, pr_call(pr, node, pt));
 
-  Node_Index node_tmp, r_arg;
+  Node_Index node_tmp;
 
   if (pt_includes_tt(pt, pr->lx.tt)) {
-    node_tmp = nd_alloc(&pr->nodes_len, pr->nodes_cap);
+    TRY(PR_ERR, pr_nd_alloc(pr, &node_tmp));
     pr->nodes[node_tmp].type = NT_BIOP_FAC;
     pr->nodes[node_tmp].as.bp.lhs = *node;
 
-    r_arg = pr->nodes[node_tmp].as.bp.rhs =
-        nd_alloc(&pr->nodes_len, pr->nodes_cap);
-    pr->nodes[r_arg].type = NT_PRIM_INT;
-    pr->nodes[r_arg].as.pm.i = pr->lx.pm.i;
+    TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[node_tmp].as.bp.rhs));
+    pr->nodes[pr->nodes[node_tmp].as.bp.rhs].type = NT_PRIM_INT;
+    pr->nodes[pr->nodes[node_tmp].as.bp.rhs].as.pm.i = pr->lx.pm.i;
     lx_next_token(&pr->lx);
 
     *node = node_tmp;
@@ -738,6 +736,7 @@ typedef enum {
   IR_ERR_NOT_DEFINED_FOR_TYPE,
   IR_ERR_NOT_DEFINED_SYMBOL,
   IR_ERR_NOT_IMPLEMENTED,
+  IR_ERR_MEMORY_NOT_ENOUGH,
 } IR_ERR;
 
 const char *ir_err_stringify(IR_ERR ir_err) {
@@ -749,6 +748,7 @@ const char *ir_err_stringify(IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_FOR_TYPE)
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_SYMBOL)
     STRINGIFY_CASE(IR_ERR_NOT_IMPLEMENTED)
+    STRINGIFY_CASE(IR_ERR_MEMORY_NOT_ENOUGH)
   }
 
   return STRINGIFY(INVALID_IR_ERR);
@@ -766,6 +766,14 @@ typedef struct {
 } Interpreter;
 
 IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
+
+IR_ERR ir_nd_reserve(Interpreter *ir) {
+  if (ir->nodes_len + 1 >= ir->nodes_cap)
+    return IR_ERR_MEMORY_NOT_ENOUGH;
+
+  ++ir->nodes_len;
+  return IR_ERR_NOERROR;
+}
 
 //=:interpreter:unop
 
@@ -975,7 +983,7 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
               .as.pm = ir->nodes[ir->nodes_len].as.pm};
 
   if (ir->pr->nodes[src].type == NT_BIOP_XPC)
-    nd_alloc(&ir->nodes_len, ir->nodes_cap);
+    TRY(IR_ERR, ir_nd_reserve(ir));
 
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
   Node rhs = {.type = ir->nodes[ir->nodes_len].type,
