@@ -52,4 +52,5 @@ Same as functions. First word is an abbreviation of struct name.
 | `Interpreter` | `IR`         |
 
 ## Acknowledgements
+- Thanks to [Shiney](https://github.com/ItzShiney) for helping with some math formulas.
 - Thanks to [Giovanni Crisalfi](https://github.com/gicrisf) for [the kaomoji collection](https://github.com/gicrisf/kaomel) used in this file.
