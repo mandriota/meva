@@ -882,7 +882,7 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
     return IR_ERR_NOERROR;
   }
 
-  if (lhs.type == NT_PRIM_CMX)
+  if (lhs.type == NT_PRIM_CMX && rhs.type == NT_PRIM_CMX)
     return ir_biop_exec_ncmx(ir, ir->pr->nodes[src].type, lhs.as.pm.c,
                              rhs.as.pm.c);
 
