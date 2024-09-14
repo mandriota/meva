@@ -169,6 +169,7 @@ typedef struct {
 
 double lx_read_integer(Lexer *lx, double *log10) {
   double integer = 0;
+  *log10 = 0;
 
   while (is_digit(lx->rd.cch)) {
     integer = integer * 10 + lx->rd.cch - '0';
