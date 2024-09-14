@@ -198,8 +198,11 @@ void lx_next_token_number(Lexer *lx) {
   lx->tt = TT_ILL;
 
   int_t decimal_log10, mnt, exp;
+  bool lz = lx->rd.cch == '0';
   while (lx->rd.cch == '0')
     rd_next_char(&lx->rd);
+  if (!is_digit(lx->rd.cch) && lz)
+    lx->rd.cch = '0';
   int_t integer_log10 = lx_read_integer(lx, &mnt, &exp);
 
   if (lx->rd.cch == '.') {
