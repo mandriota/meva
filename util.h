@@ -65,12 +65,6 @@
     fflush(stderr);                                                            \
   }
 
-#define WARNING_INT_TO_CMX(reason)                                             \
-  {                                                                            \
-    WARNING("number was converted into complex due to " reason "\n");          \
-    WARNING("this will result in accuracy reduction\n");                       \
-  }
-
 #define TRY(type, expr)                                                        \
   {                                                                            \
     type err = expr;                                                           \
@@ -109,7 +103,35 @@
 
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64) || defined(WIN64)
 #include <memory.h>
-ssize_t getline(char **lineptr, size_t *n, FILE *stream);
+ssize_t getline(char **restrict lineptr, size_t *restrict n,
+                FILE *restrict stream) {
+  if (*lineptr == NULL) {
+    *n = 512;
+    *lineptr = (char *)malloc(*n * sizeof(char));
+    if (*lineptr == NULL)
+      return -1;
+  }
+
+  size_t cp = 0;
+  char cc = 0;
+
+  do {
+    cc = (*lineptr)[cp] = getc(stream);
+
+    ++cp;
+    if (cp >= *n) {
+      *n *= 2;
+      *lineptr = (char *)realloc(*lineptr, *n);
+      if (*lineptr == NULL)
+        return -1;
+    }
+  } while (cc != '\n' && !ferror(stream));
+
+  if (ferror(stream) && !feof(stream))
+    return -1;
+
+  return cp;
+}
 #endif
 
 #define MAX(a, b) (a >= b ? a : b)
@@ -144,21 +166,9 @@ typedef struct {
 
 typedef double complex cmx_t;
 
-#ifdef BITINT_MAXWIDTH
-typedef _BitInt(BITINT_MAXWIDTH) int_t;
-
-typedef unsigned _BitInt(BITINT_MAXWIDTH) uint_t;
-#else
-typedef int64_t int_t;
-
-typedef uint64_t uint_t;
-#endif
-
 typedef uint64_t sym_t;
 
 typedef bool bol_t;
-
-#define INT_T_MAX ((int_t)((~(uint_t)0) / 2))
 
 #define SYM_T_BITSIZE (sizeof(sym_t) * 8)
 
@@ -166,59 +176,131 @@ typedef bool bol_t;
 
 //=:util:encoding
 
-char encode_symbol_c(char c);
+char encode_symbol_c(char c) {
+  if (is_upper(c))
+    return (c - 'A') + 1;
+  if (is_lower(c))
+    return (c - 'a') + ENC_OFF + 1;
+  if (c == '_')
+    return ENC_OFF * 2 + 1;
+  if (is_digit(c))
+    return (c - '0') + ENC_OFF * 2 + 2;
 
-char decode_symbol_c(char c);
+  DBG_FATAL("symbol's character (%d) is out of range", c);
+  return 0;
+}
 
-char *decode_symbol(char *dst, char *dst_end, sym_t src);
+char decode_symbol_c(char c) {
+  if (c >= 1 && c <= ENC_OFF)
+    return (c + 'A') - 1;
+  if (c >= ENC_OFF + 1 && c <= ENC_OFF * 2)
+    return (c + 'a') - ENC_OFF - 1;
+  if (c == ENC_OFF * 2 + 1)
+    return '_';
+  if (c >= ENC_OFF * 2 + 2 && c <= ENC_OFF * 2 + 12)
+    return (c + '0') - ENC_OFF * 2 - 2;
+
+  DBG_FATAL("symbol's character (%d) is out of range", c);
+  return 0;
+}
+
+char *decode_symbol(char *dst, char *dst_end, sym_t src) {
+  char *p, c;
+
+  for (p = dst; src && p < dst_end; ++p) {
+    c = src & ((1 << 6) - 1);
+    *p = decode_symbol_c(c);
+    src >>= 6;
+  }
+
+  if (src != 0)
+    FATAL("buffer capacity is not enough\n");
+
+  return p;
+}
 
 //=:runtime
 
-char *int_stringify(char *dst, char *dst_end, int_t num);
-
 typedef union {
   cmx_t c;
-  int_t i;
-  uint_t u;
   sym_t s;
   bol_t b;
 } Primitive;
 
+//=:runtime:assertions
+#define ASSERT_NON_NEG_INT(x, fn, what, rt, action)                            \
+  if (x < 0 && fmod(-x, 1) <= MAX_DIFF_ABS) {                                  \
+    WARNING(fn " of negative integer " what "\n");                             \
+    action;                                                                    \
+    return rt;                                                                 \
+  }
+
+#define ASSERT_IMG_ZER(x, fn)                                                  \
+  if (cimag(x) != 0) {                                                         \
+    WARNING(fn                                                                 \
+            " of a number with imaginary part != 0 is not implemented yet");   \
+    rt->c = NAN;                                                               \
+    return NT_PRIM_CMX;                                                        \
+  }
+
 //=:runtime:operators
 
-static inline Node_Type add_int(Primitive *rt, int_t a, int_t b) {
-  if ((a < 0) == (b < 0) && INT_T_MAX - ABS(a) < ABS(b)) {
-    rt->c = (cmx_t)a + b;
+cmx_t fac_cmx_helper(cmx_t i, uint64_t step) {
+  cmx_t rt = 0;
+
+  for (uint64_t j = 1; j <= step; ++j)
+    rt += cos(acos(cos(2 * j * M_PI / step)) * i);
+
+  return rt / step;
+}
+
+Node_Type fac_cmx(Primitive *rt, cmx_t base, cmx_t step) {
+  ASSERT_IMG_ZER(base, "factorial");
+
+  double rbase = creal(base);
+  double rstep = creal(step);
+  uint64_t ustep = (uint64_t)step;
+
+  ASSERT_NON_NEG_INT(rbase, "factorial", "is equal to infinity", NT_PRIM_CMX,
+                     rt->c = INFINITY);
+
+  rt->c = pow(rstep, rbase / rstep) * tgamma(1 + rbase / rstep);
+
+  for (uint64_t i = 1; i < ustep; ++i)
+    rt->c *= pow(pow(rstep, (rstep - i) / rstep) / tgamma(i / rstep),
+                 fac_cmx_helper(rbase - i, ustep));
+
+  return NT_PRIM_CMX;
+}
+
+enum {
+  GAMMA_LOWER_QUO_E_ITER = 1 << 6,
+};
+
+cmx_t gamma_lower_quo_e(double s) {
+  cmx_t rt = 0;
+
+  for (int i = 0; i <= GAMMA_LOWER_QUO_E_ITER; ++i)
+    rt += (i % 2 == 0 ? 1 : -1) * tgamma(s) / (tgamma(s + i + 1));
+
+  return cpow((cmx_t)-1, (cmx_t)s) * rt;
+}
+
+Node_Type subfac_cmx(Primitive *rt, cmx_t base) {
+  ASSERT_IMG_ZER(base, "subfactorial");
+
+  double rbase = creal(base);
+
+  ASSERT_NON_NEG_INT(rbase, "subfactorial", "currently is not implemented",
+                     NT_PRIM_CMX, rt->c = NAN);
+
+  if (rbase >= 0 && fmod(rbase, 1) <= MAX_DIFF_ABS) {
+    rt->c = creal(tgamma(rbase + 1) / M_E - gamma_lower_quo_e(rbase + 1));
     return NT_PRIM_CMX;
   }
-
-  rt->i = a + b;
-  return NT_PRIM_INT;
+  rt->c = tgamma(rbase + 1) / M_E - gamma_lower_quo_e(base + 1);
+  return NT_PRIM_CMX;
 }
-
-static inline Node_Type sub_int(Primitive *rt, int_t a, int_t b) {
-  return add_int(rt, a, -b);
-}
-
-static inline Node_Type mul_int(Primitive *rt, int_t a, int_t b) {
-  if (b != 0 && INT_T_MAX / b < a) {
-    rt->c = (cmx_t)a * b;
-    return NT_PRIM_CMX;
-  }
-
-  rt->i = a * b;
-  return NT_PRIM_INT;
-}
-
-Node_Type pow_int(Primitive *rt, int_t base, int_t expo);
-
-Node_Type fac_int(Primitive *rt, int_t base, int_t step);
-
-Node_Type fac_cmx(Primitive *rt, cmx_t base, int_t step);
-
-Node_Type subfac_int(Primitive *rt, int_t base);
-
-Node_Type subfac_cmx(Primitive *rt, cmx_t base);
 
 //=:intratypes:stringify
 
@@ -227,7 +309,6 @@ static inline const char *tt_stringify(Token_Type tt) {
     STRINGIFY_CASE(TT_ILL)
     STRINGIFY_CASE(TT_EOS)
     STRINGIFY_CASE(TT_SYM)
-    STRINGIFY_CASE(TT_INT)
     STRINGIFY_CASE(TT_CMX)
     STRINGIFY_CASE(TT_FAL)
     STRINGIFY_CASE(TT_TRU)
@@ -261,7 +342,6 @@ static inline const char *tt_stringify(Token_Type tt) {
 static inline const char *nt_stringify(Node_Type nt) {
   switch (nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
-    STRINGIFY_CASE(NT_PRIM_INT)
     STRINGIFY_CASE(NT_PRIM_CMX)
     STRINGIFY_CASE(NT_PRIM_BOL)
     STRINGIFY_CASE(NT_BIOP_LET)
