@@ -32,7 +32,6 @@
 #include "config.h"
 
 #include "hmap.h"
-#include "intratypes.h"
 #include "util.h"
 
 #include <assert.h>
@@ -211,22 +210,22 @@ void lx_next_token_symbol(Lexer *lx) {
 
   unsigned bit_off = 0;
 
-  while (is_letter(lx->rd.cch) || is_digit(lx->rd.cch)) {
-    lx->pm.s |= encode_symbol_c(lx->rd.cch) << bit_off;
+  do {
+    lx->pm.s |= (sym_t)encode_symbol_c(lx->rd.cch) << bit_off;
     bit_off += 6;
     if (bit_off > SYM_T_BITSIZE) {
       ERROR("identifier is too long (> %lu)\n", SYM_T_BITSIZE / 6);
       return;
     }
     rd_next_char(&lx->rd);
-  }
+  } while (is_letter(lx->rd.cch) || is_digit(lx->rd.cch));
 
   rd_prev(&lx->rd);
   lx->tt = TT_SYM;
 }
 
-void lx_next_token_factorial(Lexer *lx) {
-  lx->tt = TT_FAC;
+void lx_next_token_factorial(Lexer *lx, bool whitespace_prefix) {
+  lx->tt = TT_ILL;
 
   unsigned c = 0;
   for (; lx->rd.cch == '!'; ++c)
@@ -239,14 +238,18 @@ void lx_next_token_factorial(Lexer *lx) {
     return;
   }
 
-  if (c == 1)
+  if (c == 1 && !is_whitespace(lx->rd.cch) && lx->rd.cch != '\0') {
     lx->tt = TT_NOT;
+  } else if (!whitespace_prefix && lx->rd.ptr != 1) {
+    lx->tt = TT_FAC;
+  }
+
   rd_prev(&lx->rd);
 }
 
-#define LX_TRY_C(on_success_tt, c, ...)                                        \
+#define LX_TRY_C(on_success_tt, fn, ...)                                       \
   {                                                                            \
-    if (lx->rd.cch == c) {                                                     \
+    if (fn) {                                                                  \
       lx->tt = on_success_tt;                                                  \
       __VA_ARGS__;                                                             \
       return;                                                                  \
@@ -264,14 +267,18 @@ void lx_next_token_factorial(Lexer *lx) {
 
 void lx_next_token(Lexer *lx) {
   rd_next_char(&lx->rd);
+  bool whitespace_prefix = is_whitespace(lx->rd.cch);
   rd_skip_whitespaces(&lx->rd);
 
   lx->rd.mrk = lx->rd.ptr;
   lx->tt = TT_ILL;
 
   switch (lx->rd.cch) {
-    EXEC_CASE('+', lx->tt = TT_ADD)
-    EXEC_CASE('-', LX_LOOKUP(lx->tt = TT_SUB, LX_TRY_C(TT_SPZ, '>', )))
+    EXEC_CASE('+', LX_LOOKUP(lx->tt = TT_NOP,
+                             LX_TRY_C(TT_ADD, is_whitespace(lx->rd.cch), )))
+    EXEC_CASE('-', LX_LOOKUP(lx->tt = TT_NEG,
+                             LX_TRY_C(TT_SPZ, lx->rd.cch == '>', )
+                                 LX_TRY_C(TT_SUB, is_whitespace(lx->rd.cch), )))
     EXEC_CASE('*', lx->tt = TT_MUL)
     EXEC_CASE('/', lx->tt = TT_QUO)
     EXEC_CASE('%', lx->tt = TT_MOD)
@@ -280,15 +287,17 @@ void lx_next_token(Lexer *lx) {
     EXEC_CASE(')', lx->tt = TT_RP0)
     EXEC_CASE(';', lx->tt = TT_XPC)
     EXEC_CASE('\0', lx->tt = TT_EOS)
-    EXEC_CASE('!', lx_next_token_factorial(lx))
-    EXEC_CASE('&', LX_LOOKUP(TT_ILL, LX_TRY_C(TT_AND, '&', )))
-    EXEC_CASE('|', LX_LOOKUP(TT_ABS, LX_TRY_C(TT_ORR, '|', )))
-    EXEC_CASE('>', LX_LOOKUP(TT_GRE, LX_TRY_C(TT_GEQ, '=', )))
-    EXEC_CASE('<', LX_LOOKUP(TT_LES, LX_TRY_C(TT_LEQ, '=', )))
-    EXEC_CASE('=', LX_LOOKUP(TT_LET, LX_TRY_C(TT_EQU, '=', )))
+    EXEC_CASE('!', lx_next_token_factorial(lx, whitespace_prefix))
+    EXEC_CASE('&', LX_LOOKUP(TT_ILL, LX_TRY_C(TT_AND, lx->rd.cch == '&', )))
+    EXEC_CASE('|', LX_LOOKUP(TT_ABS, LX_TRY_C(TT_ORR, lx->rd.cch == '|', )))
+    EXEC_CASE('>', LX_LOOKUP(TT_GRE, LX_TRY_C(TT_GEQ, lx->rd.cch == '=', )))
+    EXEC_CASE('<', LX_LOOKUP(TT_LES, LX_TRY_C(TT_LEQ, lx->rd.cch == '=', )))
+    EXEC_CASE('=', LX_LOOKUP(TT_LET, LX_TRY_C(TT_EQU, lx->rd.cch == '=', )))
     EXEC_CASE('\'',
-              LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, 'f', ) LX_TRY_C(TT_TRU, 't', )
-                                    LX_TRY_C(TT_CMX, 'i', lx->pm.c = I)))
+              LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, lx->rd.cch == 'f', )
+                                    LX_TRY_C(TT_TRU, lx->rd.cch == 't', )
+                                        LX_TRY_C(TT_CMX, lx->rd.cch == 'i',
+                                                 lx->pm.c = I)))
   default:
     if (is_digit(lx->rd.cch) || lx->rd.cch == '.') {
       lx_next_token_number(lx);
@@ -388,6 +397,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
       case NT_BIOP_XPC:
       case NT_BIOP_SPZ:
       case NT_BIOP_FAC:
+      case NT_CALL:
         printf("\n");
         node_tmp = node;
         node = nodes[node_tmp].as.bp.lhs;
@@ -404,8 +414,6 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
         node = nodes[node].as.up.nhs;
         ++depth;
         continue;
-      case NT_CALL:
-        FATAL("currently not implimented\n");
       }
     }
 
@@ -442,6 +450,7 @@ typedef enum {
   PT_POW0,
   PT_POW1,
   PT_FAC,
+  PT_CAL,
   PT_PRIM,
 } Priority;
 
@@ -461,15 +470,17 @@ bool pt_includes_tt(Priority pt, Token_Type tt) {
   case PT_AND:
     return tt == TT_AND;
   case PT_ADD_SUB:
-    return tt == TT_ADD || tt == TT_SUB;
+    return tt == TT_ADD || tt == TT_NOP || tt == TT_SUB || tt == TT_NEG;
   case PT_MUL_QUO_MOD:
     return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
   case PT_NOT_NOP_NEG:
-    return tt == TT_NOT || tt == TT_SUB || tt == TT_ADD;
+    return tt == TT_NOT || tt == TT_NEG || tt == TT_NOP;
   case PT_POW0:
     return tt == TT_POW;
   case PT_FAC:
     return tt == TT_NOT || tt == TT_FAC;
+  case PT_CAL:
+    return tt == TT_LP0;
   default:
     DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
     return false;
@@ -568,8 +579,8 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
 PR_ERR pr_next_unop_node(Parser *pr, Node_Index *node, Priority pt) {
   if (pt_includes_tt(pt, pr->lx.tt)) {
     pr->nodes[*node].type = NT_UNOP_NOT * (pr->lx.tt == TT_NOT) +
-                            NT_UNOP_NEG * (pr->lx.tt == TT_SUB) +
-                            NT_UNOP_NOP * (pr->lx.tt == TT_ADD);
+                            NT_UNOP_NEG * (pr->lx.tt == TT_NEG) +
+                            NT_UNOP_NOP * (pr->lx.tt == TT_NOP);
 
     TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[*node].as.up.nhs));
 
@@ -588,11 +599,12 @@ PR_ERR pr_next_biop_node(Parser *pr, Node_Index *node, Priority pt) {
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
     TRY(PR_ERR, pr_nd_alloc(pr, &node_tmp));
-    pr->nodes[node_tmp].type = (Node_Type)pr->lx.tt;
+    pr->nodes[node_tmp].type = tt_to_biop_nd(pr->lx.tt);
     pr->nodes[node_tmp].as.bp.lhs = *node;
     TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[node_tmp].as.bp.rhs));
 
-    lx_next_token(&pr->lx);
+    if (pr->lx.tt != TT_LP0)
+      lx_next_token(&pr->lx);
     TRY(PR_ERR,
         pr_call(pr, &pr->nodes[node_tmp].as.bp.rhs, pt + pt_rl_biop(pt)));
 
@@ -680,6 +692,8 @@ PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   case PT_POW1:
     return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
   case PT_FAC:
+    return pr_next_biop_node(pr, node, PT_CAL);
+  case PT_CAL:
     return pr_next_prim_node(pr, node, PT_PRIM);
   case PT_PRIM:
     return pr_skip_rp0(pr, node, PT_SKIP_RP0);

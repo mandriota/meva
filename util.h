@@ -23,8 +23,6 @@
 
 #include "config.h"
 
-#include "intratypes.h"
-
 #include <complex.h>
 #include <limits.h>
 #include <stdbool.h> // IWYU pragma: keep
@@ -219,6 +217,217 @@ char *decode_symbol(char *dst, char *dst_end, sym_t src) {
   return p;
 }
 
+//=:lexer:tokens
+
+typedef enum {
+  TT_ILL = -1,
+  TT_EOS,
+
+  TT_SYM,
+  TT_CMX,
+  TT_FAL,
+  TT_TRU,
+
+  TT_LET,
+
+  TT_AND,
+  TT_ORR,
+
+  TT_GRE,
+  TT_LES,
+  TT_GEQ,
+  TT_LEQ,
+  TT_EQU,
+  TT_NEQ,
+
+  TT_ADD,
+  TT_SUB,
+
+  TT_MUL,
+  TT_QUO,
+  TT_MOD,
+
+  TT_POW,
+
+  TT_XPC,
+  TT_SPZ,
+
+  TT_NEG,
+  TT_NOP,
+  TT_NOT,
+  TT_FAC,
+
+  TT_LP0,
+  TT_RP0,
+
+  TT_ABS,
+} Token_Type;
+
+//=:lexer:tokens:stringify
+
+static inline const char *tt_stringify(Token_Type tt) {
+  switch (tt) {
+    STRINGIFY_CASE(TT_ILL)
+    STRINGIFY_CASE(TT_EOS)
+    STRINGIFY_CASE(TT_SYM)
+    STRINGIFY_CASE(TT_CMX)
+    STRINGIFY_CASE(TT_FAL)
+    STRINGIFY_CASE(TT_TRU)
+    STRINGIFY_CASE(TT_LET)
+    STRINGIFY_CASE(TT_AND)
+    STRINGIFY_CASE(TT_ORR)
+    STRINGIFY_CASE(TT_GRE)
+    STRINGIFY_CASE(TT_LES)
+    STRINGIFY_CASE(TT_GEQ)
+    STRINGIFY_CASE(TT_LEQ)
+    STRINGIFY_CASE(TT_EQU)
+    STRINGIFY_CASE(TT_NEQ)
+    STRINGIFY_CASE(TT_ADD)
+    STRINGIFY_CASE(TT_SUB)
+    STRINGIFY_CASE(TT_MUL)
+    STRINGIFY_CASE(TT_QUO)
+    STRINGIFY_CASE(TT_MOD)
+    STRINGIFY_CASE(TT_POW)
+    STRINGIFY_CASE(TT_XPC)
+    STRINGIFY_CASE(TT_SPZ)
+    STRINGIFY_CASE(TT_NEG)
+    STRINGIFY_CASE(TT_NOP)
+    STRINGIFY_CASE(TT_NOT)
+    STRINGIFY_CASE(TT_FAC)
+    STRINGIFY_CASE(TT_LP0)
+    STRINGIFY_CASE(TT_RP0)
+    STRINGIFY_CASE(TT_ABS)
+  }
+
+  return STRINGIFY(INVALID_TT);
+}
+
+//=:parser:nodes
+
+typedef enum {
+  NT_PRIM_SYM = TT_SYM,
+  NT_PRIM_CMX = TT_CMX,
+  NT_PRIM_BOL,
+
+  NT_BIOP_LET = TT_LET,
+
+  NT_BIOP_AND = TT_AND,
+  NT_BIOP_ORR = TT_ORR,
+
+  NT_BIOP_GRE = TT_GRE,
+  NT_BIOP_LES = TT_LES,
+  NT_BIOP_GEQ = TT_GEQ,
+  NT_BIOP_LEQ = TT_LEQ,
+  NT_BIOP_EQU = TT_EQU,
+  NT_BIOP_NEQ = TT_NEQ,
+
+  NT_BIOP_ADD = TT_ADD,
+  NT_BIOP_SUB = TT_SUB,
+
+  NT_BIOP_MUL = TT_MUL,
+  NT_BIOP_QUO = TT_QUO,
+  NT_BIOP_MOD = TT_MOD,
+
+  NT_BIOP_POW = TT_POW,
+
+  NT_BIOP_XPC = TT_XPC,
+  NT_BIOP_SPZ = TT_SPZ,
+
+  NT_BIOP_FAC = TT_FAC,
+
+  NT_UNOP_ABS = TT_ABS,
+
+  NT_UNOP_NOT,
+  NT_UNOP_NOP,
+  NT_UNOP_NEG,
+
+  NT_CALL,
+} Node_Type;
+
+//=:parser:nodes:stringify
+
+static inline const char *nt_stringify(Node_Type nt) {
+  switch (nt) {
+    STRINGIFY_CASE(NT_PRIM_SYM)
+    STRINGIFY_CASE(NT_PRIM_CMX)
+    STRINGIFY_CASE(NT_PRIM_BOL)
+    STRINGIFY_CASE(NT_BIOP_LET)
+    STRINGIFY_CASE(NT_BIOP_AND)
+    STRINGIFY_CASE(NT_BIOP_ORR)
+    STRINGIFY_CASE(NT_BIOP_GRE)
+    STRINGIFY_CASE(NT_BIOP_LES)
+    STRINGIFY_CASE(NT_BIOP_GEQ)
+    STRINGIFY_CASE(NT_BIOP_LEQ)
+    STRINGIFY_CASE(NT_BIOP_EQU)
+    STRINGIFY_CASE(NT_BIOP_NEQ)
+    STRINGIFY_CASE(NT_BIOP_ADD)
+    STRINGIFY_CASE(NT_BIOP_SUB)
+    STRINGIFY_CASE(NT_BIOP_MUL)
+    STRINGIFY_CASE(NT_BIOP_QUO)
+    STRINGIFY_CASE(NT_BIOP_MOD)
+    STRINGIFY_CASE(NT_BIOP_POW)
+    STRINGIFY_CASE(NT_BIOP_XPC)
+    STRINGIFY_CASE(NT_BIOP_SPZ)
+    STRINGIFY_CASE(NT_BIOP_FAC)
+    STRINGIFY_CASE(NT_UNOP_ABS)
+    STRINGIFY_CASE(NT_UNOP_NOT)
+    STRINGIFY_CASE(NT_UNOP_NOP)
+    STRINGIFY_CASE(NT_UNOP_NEG)
+    STRINGIFY_CASE(NT_CALL)
+  }
+
+  return STRINGIFY(INVALID_NT);
+}
+
+//=:parser:tokens:map
+
+Node_Type tt_to_biop_nd(Token_Type tt) {
+  switch (tt) {
+  case TT_LET:
+    return NT_BIOP_LET;
+  case TT_AND:
+    return NT_BIOP_AND;
+  case TT_ORR:
+    return NT_BIOP_ORR;
+  case TT_GRE:
+    return NT_BIOP_GRE;
+  case TT_LES:
+    return NT_BIOP_LES;
+  case TT_GEQ:
+    return NT_BIOP_GEQ;
+  case TT_LEQ:
+    return NT_BIOP_LEQ;
+  case TT_EQU:
+    return NT_BIOP_EQU;
+  case TT_NEQ:
+    return NT_BIOP_NEQ;
+  case TT_ADD:
+  case TT_NOP:
+    return NT_BIOP_ADD;
+  case TT_SUB:
+  case TT_NEG:
+    return NT_BIOP_SUB;
+  case TT_MUL:
+    return NT_BIOP_MUL;
+  case TT_QUO:
+    return NT_BIOP_QUO;
+  case TT_MOD:
+    return NT_BIOP_MOD;
+  case TT_POW:
+    return NT_BIOP_POW;
+  case TT_XPC:
+    return NT_BIOP_XPC;
+  case TT_SPZ:
+    return NT_BIOP_SPZ;
+  case TT_FAC:
+    return NT_BIOP_FAC;
+  case TT_LP0:
+    return NT_CALL;
+  default:
+    FATAL("illegal biop token");
+  }
+}
+
 //=:runtime
 
 typedef union {
@@ -300,76 +509,6 @@ Node_Type subfac_cmx(Primitive *rt, cmx_t base) {
   }
   rt->c = tgamma(rbase + 1) / M_E - gamma_lower_quo_e(base + 1);
   return NT_PRIM_CMX;
-}
-
-//=:intratypes:stringify
-
-static inline const char *tt_stringify(Token_Type tt) {
-  switch (tt) {
-    STRINGIFY_CASE(TT_ILL)
-    STRINGIFY_CASE(TT_EOS)
-    STRINGIFY_CASE(TT_SYM)
-    STRINGIFY_CASE(TT_CMX)
-    STRINGIFY_CASE(TT_FAL)
-    STRINGIFY_CASE(TT_TRU)
-    STRINGIFY_CASE(TT_LET)
-    STRINGIFY_CASE(TT_AND)
-    STRINGIFY_CASE(TT_ORR)
-    STRINGIFY_CASE(TT_GRE)
-    STRINGIFY_CASE(TT_LES)
-    STRINGIFY_CASE(TT_GEQ)
-    STRINGIFY_CASE(TT_LEQ)
-    STRINGIFY_CASE(TT_EQU)
-    STRINGIFY_CASE(TT_NEQ)
-    STRINGIFY_CASE(TT_ADD)
-    STRINGIFY_CASE(TT_SUB)
-    STRINGIFY_CASE(TT_MUL)
-    STRINGIFY_CASE(TT_QUO)
-    STRINGIFY_CASE(TT_MOD)
-    STRINGIFY_CASE(TT_POW)
-    STRINGIFY_CASE(TT_XPC)
-    STRINGIFY_CASE(TT_SPZ)
-    STRINGIFY_CASE(TT_NOT)
-    STRINGIFY_CASE(TT_FAC)
-    STRINGIFY_CASE(TT_LP0)
-    STRINGIFY_CASE(TT_RP0)
-    STRINGIFY_CASE(TT_ABS)
-  }
-
-  return STRINGIFY(INVALID_TT);
-}
-
-static inline const char *nt_stringify(Node_Type nt) {
-  switch (nt) {
-    STRINGIFY_CASE(NT_PRIM_SYM)
-    STRINGIFY_CASE(NT_PRIM_CMX)
-    STRINGIFY_CASE(NT_PRIM_BOL)
-    STRINGIFY_CASE(NT_BIOP_LET)
-    STRINGIFY_CASE(NT_BIOP_AND)
-    STRINGIFY_CASE(NT_BIOP_ORR)
-    STRINGIFY_CASE(NT_BIOP_GRE)
-    STRINGIFY_CASE(NT_BIOP_LES)
-    STRINGIFY_CASE(NT_BIOP_GEQ)
-    STRINGIFY_CASE(NT_BIOP_LEQ)
-    STRINGIFY_CASE(NT_BIOP_EQU)
-    STRINGIFY_CASE(NT_BIOP_NEQ)
-    STRINGIFY_CASE(NT_BIOP_ADD)
-    STRINGIFY_CASE(NT_BIOP_SUB)
-    STRINGIFY_CASE(NT_BIOP_MUL)
-    STRINGIFY_CASE(NT_BIOP_QUO)
-    STRINGIFY_CASE(NT_BIOP_MOD)
-    STRINGIFY_CASE(NT_BIOP_POW)
-    STRINGIFY_CASE(NT_BIOP_XPC)
-    STRINGIFY_CASE(NT_BIOP_SPZ)
-    STRINGIFY_CASE(NT_BIOP_FAC)
-    STRINGIFY_CASE(NT_UNOP_ABS)
-    STRINGIFY_CASE(NT_UNOP_NOT)
-    STRINGIFY_CASE(NT_UNOP_NOP)
-    STRINGIFY_CASE(NT_UNOP_NEG)
-    STRINGIFY_CASE(NT_CALL)
-  }
-
-  return STRINGIFY(INVALID_NT);
 }
 
 #endif
