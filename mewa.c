@@ -877,61 +877,83 @@ IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
   return IR_ERR_NOERROR;
 }
 
+#define EC_SQRT (12241645)
+#define EC_CEIL (10106845)
+#define EC_ROUND (513997420)
+#define EC_FLOOR (749115808)
+#define EC_LN (2598)
+#define EC_EXP (175263)
+#define EC_COS (186973)
+#define EC_SIN (166125)
+#define EC_TAN (165614)
+#define EC_COSH (9099869)
+#define EC_SINH (9079021)
+#define EC_TANH (9078510)
+#define EC_ACOS (11966299)
+#define EC_ASIN (10632027)
+#define EC_ATAN (10599323)
+#define EC_ACOSH (582391643)
+#define EC_ASINH (581057371)
+#define EC_ATANH (581024667)
+
 IR_ERR ir_call_exec_builtin_cmx(Interpreter *ir, sym_t fn, cmx_t arg) {
   ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
 
   switch (fn) {
-  case 12241645: // sqrt
+  case EC_SQRT:
     ir->nodes[ir->nodes_len].as.pm.c = sqrt(arg);
     break;
-  case 10106845: // ceil
+  case EC_CEIL:
     ir->nodes[ir->nodes_len].as.pm.c = ceil(creal(arg)) + ceil(cimag(arg)) * I;
     break;
-  case 513997420: // round
+  case EC_ROUND:
     ir->nodes[ir->nodes_len].as.pm.c =
         round(creal(arg)) + round(cimag(arg)) * I;
     break;
-  case 749115808: // floor
+  case EC_FLOOR:
     ir->nodes[ir->nodes_len].as.pm.c =
         floor(creal(arg)) + floor(cimag(arg)) * I;
     break;
-  case 2598: // ln
+  case EC_LN:
     ir->nodes[ir->nodes_len].as.pm.c = log(arg);
     break;
-  case 175263: // exp
+  case EC_EXP:
     ir->nodes[ir->nodes_len].as.pm.c = exp(arg);
     break;
-  case 186973: // cos
+  case EC_COS:
     ir->nodes[ir->nodes_len].as.pm.c = cos(arg);
     break;
-  case 166125: // sin
+  case EC_SIN:
     ir->nodes[ir->nodes_len].as.pm.c = sin(arg);
     break;
-  case 165614: // tan
+  case EC_TAN:
     ir->nodes[ir->nodes_len].as.pm.c = tan(arg);
     break;
-  case 9099869: // cosh
+  case EC_COSH:
     ir->nodes[ir->nodes_len].as.pm.c = cosh(arg);
     break;
-  case 9079021: // sinh
+  case EC_SINH:
     ir->nodes[ir->nodes_len].as.pm.c = sinh(arg);
     break;
-  case 9078510: // tanh
+  case EC_TANH:
     ir->nodes[ir->nodes_len].as.pm.c = tanh(arg);
     break;
-  case 11966299: // acos
+  case EC_ACOS:
     ir->nodes[ir->nodes_len].as.pm.c = acos(arg);
     break;
-  case 10632027: // asin
+  case EC_ASIN:
     ir->nodes[ir->nodes_len].as.pm.c = asin(arg);
     break;
-  case 582391643: // acosh
+  case EC_ATAN:
+    ir->nodes[ir->nodes_len].as.pm.c = atan(arg);
+    break;
+  case EC_ACOSH:
     ir->nodes[ir->nodes_len].as.pm.c = acosh(arg);
     break;
-  case 581057371: // asinh
+  case EC_ASINH:
     ir->nodes[ir->nodes_len].as.pm.c = asinh(arg);
     break;
-  case 581024667: // atanh
+  case EC_ATANH:
     ir->nodes[ir->nodes_len].as.pm.c = atanh(arg);
     break;
   default:
