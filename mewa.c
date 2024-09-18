@@ -368,7 +368,8 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
       case NT_PRIM_SYM:
         ptr = decode_symbol(dst, &dst[sizeof dst - 1], nodes[node].as.pm.s);
         ptr_off = ptr - dst;
-        printf(CLR_PRIM "%.*s" CLR_RESET "\n", ptr_off, dst);
+        printf(CLR_PRIM "%.*s" CLR_RESET " (%llu)\n", ptr_off, dst,
+               nodes[node].as.pm.s);
         goto while2_final;
       case NT_PRIM_CMX:
         nd_tree_print_cmx(nodes[node].as.pm.c);
@@ -876,9 +877,73 @@ IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
   return IR_ERR_NOERROR;
 }
 
+IR_ERR ir_call_exec_builtin_cmx(Interpreter *ir, sym_t fn, cmx_t arg) {
+  ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
+
+  switch (fn) {
+  case 12241645: // sqrt
+    ir->nodes[ir->nodes_len].as.pm.c = sqrt(arg);
+    break;
+  case 10106845: // ceil
+    ir->nodes[ir->nodes_len].as.pm.c = ceil(creal(arg)) + ceil(cimag(arg)) * I;
+    break;
+  case 513997420: // round
+    ir->nodes[ir->nodes_len].as.pm.c =
+        round(creal(arg)) + round(cimag(arg)) * I;
+    break;
+  case 749115808: // floor
+    ir->nodes[ir->nodes_len].as.pm.c =
+        floor(creal(arg)) + floor(cimag(arg)) * I;
+    break;
+  case 2598: // ln
+    ir->nodes[ir->nodes_len].as.pm.c = log(arg);
+    break;
+  case 175263: // exp
+    ir->nodes[ir->nodes_len].as.pm.c = exp(arg);
+    break;
+  case 186973: // cos
+    ir->nodes[ir->nodes_len].as.pm.c = cos(arg);
+    break;
+  case 166125: // sin
+    ir->nodes[ir->nodes_len].as.pm.c = sin(arg);
+    break;
+  case 165614: // tan
+    ir->nodes[ir->nodes_len].as.pm.c = tan(arg);
+    break;
+  case 9099869: // cosh
+    ir->nodes[ir->nodes_len].as.pm.c = cosh(arg);
+    break;
+  case 9079021: // sinh
+    ir->nodes[ir->nodes_len].as.pm.c = sinh(arg);
+    break;
+  case 9078510: // tanh
+    ir->nodes[ir->nodes_len].as.pm.c = tanh(arg);
+    break;
+  case 11966299: // acos
+    ir->nodes[ir->nodes_len].as.pm.c = acos(arg);
+    break;
+  case 10632027: // asin
+    ir->nodes[ir->nodes_len].as.pm.c = asin(arg);
+    break;
+  case 582391643: // acosh
+    ir->nodes[ir->nodes_len].as.pm.c = acosh(arg);
+    break;
+  case 581057371: // asinh
+    ir->nodes[ir->nodes_len].as.pm.c = asinh(arg);
+    break;
+  case 581024667: // atanh
+    ir->nodes[ir->nodes_len].as.pm.c = atanh(arg);
+    break;
+  default:
+    return IR_ERR_NOT_DEFINED_SYMBOL;
+  }
+  return IR_ERR_NOERROR;
+}
+
 IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs,
-                      ir->pr->nodes[src].type != NT_BIOP_LET));
+                      ir->pr->nodes[src].type != NT_BIOP_LET &&
+                          ir->pr->nodes[src].type != NT_CALL));
   Node lhs = {.type = ir->nodes[ir->nodes_len].type,
               .as.pm = ir->nodes[ir->nodes_len].as.pm};
 
@@ -908,6 +973,10 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
     return ir_biop_exec_bool(ir, ir->pr->nodes[src].type, lhs.as.pm.b,
                              rhs.as.pm.b);
   }
+
+  if (ir->pr->nodes[src].type == NT_CALL && lhs.type == NT_PRIM_SYM &&
+      rhs.type == NT_PRIM_CMX)
+    return ir_call_exec_builtin_cmx(ir, lhs.as.pm.s, rhs.as.pm.c);
 
   return IR_ERR_NOT_IMPLEMENTED;
 }
@@ -953,9 +1022,8 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_BIOP_XPC:
   case NT_BIOP_SPZ:
   case NT_BIOP_FAC:
-    return ir_biop_exec(ir, src);
   case NT_CALL:
-    return IR_ERR_NOT_IMPLEMENTED;
+    return ir_biop_exec(ir, src);
   }
 
   return IR_ERR_ILL_NT;
