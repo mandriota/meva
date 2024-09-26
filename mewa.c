@@ -67,6 +67,8 @@ _Static_assert(INTERNAL_READING_BUF_SIZE > 0,
 
 _Static_assert(NODE_BUF_SIZE > 0, "NODE_BUF_SIZE must be at least 1");
 
+_Static_assert(GLOBAL_SCOPE_CAPACITY >= 4, "not enough capacity for builtins");
+
 //=:reader:reader
 
 typedef struct {
@@ -288,7 +290,11 @@ void lx_next_token(Lexer *lx) {
   case '>':  LX_LOOKUP(TT_GRE, LX_TRY_C(TT_GEQ, lx->rd.cch == '=', )); break;
   case '<':  LX_LOOKUP(TT_LES, LX_TRY_C(TT_LEQ, lx->rd.cch == '=', )); break;
   case '=':  LX_LOOKUP(TT_LET, LX_TRY_C(TT_EQU, lx->rd.cch == '=', )); break;
-  case '\'': LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, lx->rd.cch == 'f', ) LX_TRY_C(TT_TRU, lx->rd.cch == 't', ) LX_TRY_C(TT_CMX, lx->rd.cch == 'i', lx->pm.c = I)); break;
+  case '\'': LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, lx->rd.cch == 'f', ) LX_TRY_C(TT_TRU, lx->rd.cch == 't', )); break;
+  case 'i':
+    lx->tt = TT_CMX;
+    lx->pm.c = I;
+    break;
   default:
     if (is_digit(lx->rd.cch) || lx->rd.cch == '.') {
       lx_next_token_number(lx);
@@ -676,7 +682,8 @@ typedef enum {
   IR_ERR_NOT_DEFINED_FOR_TYPE,
   IR_ERR_NOT_DEFINED_SYMBOL,
   IR_ERR_NOT_IMPLEMENTED,
-  IR_ERR_MEMORY_NOT_ENOUGH,
+  IR_ERR_AST_MEMORY_NOT_ENOUGH,
+  IR_ERR_SYM_MEMORY_NOT_ENOUGH,
 } IR_ERR;
 
 const char *ir_err_stringify(IR_ERR ir_err) {
@@ -688,7 +695,8 @@ const char *ir_err_stringify(IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_FOR_TYPE)
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_SYMBOL)
     STRINGIFY_CASE(IR_ERR_NOT_IMPLEMENTED)
-    STRINGIFY_CASE(IR_ERR_MEMORY_NOT_ENOUGH)
+    STRINGIFY_CASE(IR_ERR_AST_MEMORY_NOT_ENOUGH)
+    STRINGIFY_CASE(IR_ERR_SYM_MEMORY_NOT_ENOUGH)
   }
 
   return STRINGIFY(INVALID_IR_ERR);
@@ -709,7 +717,7 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
 
 IR_ERR ir_nd_reserve(Interpreter *ir) {
   if (ir->nodes_len + 1 >= ir->nodes_cap)
-    return IR_ERR_MEMORY_NOT_ENOUGH;
+    return IR_ERR_AST_MEMORY_NOT_ENOUGH;
 
   ++ir->nodes_len;
   return IR_ERR_NOERROR;
@@ -835,50 +843,118 @@ IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
   return IR_ERR_NOERROR;
 }
 
-#define EC_SQRT (12241645)
-#define EC_CEIL (10106845)
-#define EC_ROUND (513997420)
-#define EC_FLOOR (749115808)
-#define EC_LN (2598)
-#define EC_EXP (175263)
-#define EC_COS (186973)
-#define EC_SIN (166125)
-#define EC_TAN (165614)
-#define EC_COSH (9099869)
-#define EC_SINH (9079021)
-#define EC_TANH (9078510)
-#define EC_ACOS (11966299)
-#define EC_ASIN (10632027)
-#define EC_ATAN (10599323)
-#define EC_ACOSH (582391643)
-#define EC_ASINH (581057371)
-#define EC_ATANH (581024667)
+#define BUILTIN_CONST_PI (2282)
+#define BUILTIN_CONST_E (31)
+#define BUILTIN_CONST_TRUE (8321838)
+#define BUILTIN_CONST_FALSE (532047584)
+#define BUILTIN_SQRT (12241645)
+#define BUILTIN_CEIL (10106845)
+#define BUILTIN_ROUND (513997420)
+#define BUILTIN_FLOOR (749115808)
+#define BUILTIN_LN (2598)
+#define BUILTIN_EXP (175263)
+#define BUILTIN_COS (186973)
+#define BUILTIN_SIN (166125)
+#define BUILTIN_TAN (165614)
+#define BUILTIN_COSH (9099869)
+#define BUILTIN_SINH (9079021)
+#define BUILTIN_TANH (9078510)
+#define BUILTIN_ACOS (11966299)
+#define BUILTIN_ASIN (10632027)
+#define BUILTIN_ATAN (10599323)
+#define BUILTIN_ACOSH (582391643)
+#define BUILTIN_ASINH (581057371)
+#define BUILTIN_ATANH (581024667)
 
 IR_ERR ir_call_exec_builtin_cmx(Interpreter *ir, sym_t fn, cmx_t arg) {
   ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
 
   switch (fn) {
-  case EC_SQRT:  ir->nodes[ir->nodes_len].as.pm.c = sqrt(arg); break;
-  case EC_CEIL:  ir->nodes[ir->nodes_len].as.pm.c = ceil(creal(arg)) + ceil(cimag(arg)) * I; break;
-  case EC_ROUND: ir->nodes[ir->nodes_len].as.pm.c = round(creal(arg)) + round(cimag(arg)) * I; break;
-  case EC_FLOOR: ir->nodes[ir->nodes_len].as.pm.c = floor(creal(arg)) + floor(cimag(arg)) * I; break;
-  case EC_LN:    ir->nodes[ir->nodes_len].as.pm.c = log(arg); break;
-  case EC_EXP:   ir->nodes[ir->nodes_len].as.pm.c = exp(arg); break;
-  case EC_COS:   ir->nodes[ir->nodes_len].as.pm.c = cos(arg); break;
-  case EC_SIN:   ir->nodes[ir->nodes_len].as.pm.c = sin(arg); break;
-  case EC_TAN:   ir->nodes[ir->nodes_len].as.pm.c = tan(arg); break;
-  case EC_COSH:  ir->nodes[ir->nodes_len].as.pm.c = cosh(arg); break;
-  case EC_SINH:  ir->nodes[ir->nodes_len].as.pm.c = sinh(arg); break;
-  case EC_TANH:  ir->nodes[ir->nodes_len].as.pm.c = tanh(arg); break;
-  case EC_ACOS:  ir->nodes[ir->nodes_len].as.pm.c = acos(arg); break;
-  case EC_ASIN:  ir->nodes[ir->nodes_len].as.pm.c = asin(arg); break;
-  case EC_ATAN:  ir->nodes[ir->nodes_len].as.pm.c = atan(arg); break;
-  case EC_ACOSH: ir->nodes[ir->nodes_len].as.pm.c = acosh(arg); break;
-  case EC_ASINH: ir->nodes[ir->nodes_len].as.pm.c = asinh(arg); break;
-  case EC_ATANH: ir->nodes[ir->nodes_len].as.pm.c = atanh(arg); break;
+  case BUILTIN_SQRT:  ir->nodes[ir->nodes_len].as.pm.c = sqrt(arg); break;
+  case BUILTIN_CEIL:  ir->nodes[ir->nodes_len].as.pm.c = ceil(creal(arg)) + ceil(cimag(arg)) * I; break;
+  case BUILTIN_ROUND: ir->nodes[ir->nodes_len].as.pm.c = round(creal(arg)) + round(cimag(arg)) * I; break;
+  case BUILTIN_FLOOR: ir->nodes[ir->nodes_len].as.pm.c = floor(creal(arg)) + floor(cimag(arg)) * I; break;
+  case BUILTIN_LN:    ir->nodes[ir->nodes_len].as.pm.c = log(arg); break;
+  case BUILTIN_EXP:   ir->nodes[ir->nodes_len].as.pm.c = exp(arg); break;
+  case BUILTIN_COS:   ir->nodes[ir->nodes_len].as.pm.c = cos(arg); break;
+  case BUILTIN_SIN:   ir->nodes[ir->nodes_len].as.pm.c = sin(arg); break;
+  case BUILTIN_TAN:   ir->nodes[ir->nodes_len].as.pm.c = tan(arg); break;
+  case BUILTIN_COSH:  ir->nodes[ir->nodes_len].as.pm.c = cosh(arg); break;
+  case BUILTIN_SINH:  ir->nodes[ir->nodes_len].as.pm.c = sinh(arg); break;
+  case BUILTIN_TANH:  ir->nodes[ir->nodes_len].as.pm.c = tanh(arg); break;
+  case BUILTIN_ACOS:  ir->nodes[ir->nodes_len].as.pm.c = acos(arg); break;
+  case BUILTIN_ASIN:  ir->nodes[ir->nodes_len].as.pm.c = asin(arg); break;
+  case BUILTIN_ATAN:  ir->nodes[ir->nodes_len].as.pm.c = atan(arg); break;
+  case BUILTIN_ACOSH: ir->nodes[ir->nodes_len].as.pm.c = acosh(arg); break;
+  case BUILTIN_ASINH: ir->nodes[ir->nodes_len].as.pm.c = asinh(arg); break;
+  case BUILTIN_ATANH: ir->nodes[ir->nodes_len].as.pm.c = atanh(arg); break;
   default:
     return IR_ERR_NOT_DEFINED_SYMBOL;
   }
+  return IR_ERR_NOERROR;
+}
+
+IR_ERR ir_list_exec(Interpreter *ir, Node_Index src) {
+  Node_Index root = ir->nodes_len;
+  ir->nodes[root].type = NT_BIOP_XPC;
+
+  TRY(IR_ERR, ir_nd_reserve(ir));
+  ir->nodes[root].as.bp.lhs = ir->nodes_len;
+  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs, true));
+
+  TRY(IR_ERR, ir_nd_reserve(ir));
+  ir->nodes[root].as.bp.rhs = ir->nodes_len;
+  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
+
+  return IR_ERR_NOERROR;
+}
+
+IR_ERR ir_tree_save(Interpreter *ir, Node_Index src) {
+  Node_Index root = ir->nodes_len;
+
+  ir->nodes[root].type = ir->pr->nodes[src].type;
+
+  switch (ir->pr->nodes[src].type) {
+  case NT_PRIM_SYM:
+  case NT_PRIM_CMX:
+  case NT_PRIM_BOL:
+    ir->nodes[root] = ir->pr->nodes[src];
+    return IR_ERR_NOERROR;
+  case NT_BIOP_LET:
+  case NT_BIOP_AND:
+  case NT_BIOP_ORR:
+  case NT_BIOP_GRE:
+  case NT_BIOP_LES:
+  case NT_BIOP_GEQ:
+  case NT_BIOP_LEQ:
+  case NT_BIOP_EQU:
+  case NT_BIOP_NEQ:
+  case NT_BIOP_ADD:
+  case NT_BIOP_SUB:
+  case NT_BIOP_MUL:
+  case NT_BIOP_QUO:
+  case NT_BIOP_MOD:
+  case NT_BIOP_POW:
+  case NT_BIOP_XPC:
+  case NT_BIOP_SPZ:
+  case NT_BIOP_FAC:
+  case NT_CALL:
+    ir_nd_reserve(ir);
+    ir->nodes[root].as.bp.lhs = ir->nodes_len;
+    ir_tree_save(ir, ir->pr->nodes[src].as.bp.lhs);
+
+    ir_nd_reserve(ir);
+    ir->nodes[root].as.bp.rhs = ir->nodes_len;
+    ir_tree_save(ir, ir->pr->nodes[src].as.bp.rhs);
+  case NT_UNOP_ABS:
+  case NT_UNOP_NOT:
+  case NT_UNOP_NEG:
+  case NT_UNOP_NOP:
+    ir_nd_reserve(ir);
+    ir->nodes[root].as.up.nhs = ir->nodes_len;
+    ir_tree_save(ir, ir->pr->nodes[src].as.up.nhs);
+  }
+
   return IR_ERR_NOERROR;
 }
 
@@ -900,7 +976,8 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
     return IR_ERR_NOERROR;
 
   if (ir->pr->nodes[src].type == NT_BIOP_LET && lhs.type == NT_PRIM_SYM) {
-    MAP_SET(ir->global, ir->global_cap, lhs.as.pm.s, &rhs);
+    if (!MAP_SET(ir->global, ir->global_cap, lhs.as.pm.s, &rhs))
+      return IR_ERR_SYM_MEMORY_NOT_ENOUGH;
     return IR_ERR_NOERROR;
   }
 
@@ -932,6 +1009,10 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_UNOP_NEG:
   case NT_UNOP_ABS:
     return ir_unop_exec(ir, src);
+  case NT_BIOP_XPC:
+    return ir_list_exec(ir, src);
+  case NT_BIOP_SPZ:
+    return ir_tree_save(ir, src);
   case NT_BIOP_LET:
   case NT_BIOP_AND:
   case NT_BIOP_ORR:
@@ -947,8 +1028,6 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_BIOP_QUO:
   case NT_BIOP_MOD:
   case NT_BIOP_POW:
-  case NT_BIOP_XPC:
-  case NT_BIOP_SPZ:
   case NT_BIOP_FAC:
   case NT_CALL:
     return ir_biop_exec(ir, src);
@@ -1042,11 +1121,11 @@ _Noreturn void repl(Interpreter *ir) {
       continue;
     }
 
-    for (size_t i = 0; i <= ir->nodes_len; ++i) {
-      printf(REPL_RESULT_PREFIX);
-      nd_tree_print(ir->nodes, i, RESULT_INDENTATION,
-                    RESULT_INDENTATION + RESULT_MAX_DEPTH);
-    }
+    printf(REPL_RESULT_PREFIX);
+    if (ir->nodes_len != 0)
+      printf("\n");
+    nd_tree_print(ir->nodes, 0, RESULT_INDENTATION,
+                  RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
     printf(REPL_RESULT_SUFFIX);
   }
@@ -1068,6 +1147,11 @@ int main(int argc, char *argv[]) {
   ir->global =
       (Map_Entry *)calloc(ir->global_cap, sizeof(Map_Entry) + sizeof(Node));
   assert(ir->pr != NULL && "allocation failed");
+
+  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_PI, (&(Node){.type = NT_PRIM_CMX, .as.pm.c = M_PI}));
+  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_E, (&(Node){.type = NT_PRIM_CMX, .as.pm.c = M_E}));
+  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_TRUE, (&(Node){.type = NT_PRIM_BOL, .as.pm.b = true}));
+  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_FALSE, (&(Node){.type = NT_PRIM_BOL, .as.pm.b = false}));
 
   *ir->pr = ((Parser){
       .lx.rd =
@@ -1131,11 +1215,9 @@ int main(int argc, char *argv[]) {
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
-  for (size_t i = 0; i <= ir->nodes_len; ++i) {
-    printf(REPL_RESULT_PREFIX);
-    nd_tree_print(ir->nodes, i, RESULT_INDENTATION,
-                  RESULT_INDENTATION + RESULT_MAX_DEPTH);
-  }
+  printf(REPL_RESULT_PREFIX);
+  nd_tree_print(ir->nodes, 0, RESULT_INDENTATION,
+                RESULT_INDENTATION + RESULT_MAX_DEPTH);
 
   printf(REPL_RESULT_SUFFIX);
 
