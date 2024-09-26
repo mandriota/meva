@@ -36,7 +36,6 @@
 
 #include <assert.h>
 #include <complex.h>
-#include <limits.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
 #include <stdio.h>
