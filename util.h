@@ -24,14 +24,12 @@
 #include "config.h"
 
 #include <complex.h>
-#include <limits.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <tgmath.h> // IWYU pragma: keep
 // IWYU pragma: no_include <math.h>
-#include <float.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846264338327950288
@@ -39,35 +37,35 @@
 
 //=:util:error_handling
 
-#define FATAL(...)                                                             \
-  {                                                                            \
-    fprintf(stderr, CLR_ERR_MSG "FATAL" CLR_RESET ": " __VA_ARGS__);           \
-    exit(EXIT_FAILURE);                                                        \
+#define FATAL(...)                                                   \
+  {                                                                  \
+    fprintf(stderr, CLR_ERR_MSG "FATAL" CLR_RESET ": " __VA_ARGS__); \
+    exit(EXIT_FAILURE);                                              \
   }
 
-#define PFATAL(s)                                                              \
-  {                                                                            \
-    perror(s);                                                                 \
-    exit(EXIT_FAILURE);                                                        \
+#define PFATAL(s)       \
+  {                     \
+    perror(s);          \
+    exit(EXIT_FAILURE); \
   }
 
-#define ERROR(...)                                                             \
-  {                                                                            \
-    fprintf(stderr, CLR_ERR_MSG "ERROR" CLR_RESET ": " __VA_ARGS__);           \
-    fflush(stderr);                                                            \
+#define ERROR(...)                                                   \
+  {                                                                  \
+    fprintf(stderr, CLR_ERR_MSG "ERROR" CLR_RESET ": " __VA_ARGS__); \
+    fflush(stderr);                                                  \
   }
 
-#define WARNING(...)                                                           \
-  {                                                                            \
-    fprintf(stderr, CLR_WRN_MSG "WARNING" CLR_RESET ": " __VA_ARGS__);         \
-    fflush(stderr);                                                            \
+#define WARNING(...)                                                   \
+  {                                                                    \
+    fprintf(stderr, CLR_WRN_MSG "WARNING" CLR_RESET ": " __VA_ARGS__); \
+    fflush(stderr);                                                    \
   }
 
-#define TRY(type, expr)                                                        \
-  {                                                                            \
-    type err = expr;                                                           \
-    if (err != type##_NOERROR)                                                 \
-      return err;                                                              \
+#define TRY(type, expr)        \
+  {                            \
+    type err = expr;           \
+    if (err != type##_NOERROR) \
+      return err;              \
   }
 
 //=:util:debug
@@ -77,10 +75,10 @@
 #define DBG_FATAL(...)
 #define DBG(x)
 #else
-#define DBG_PRINT(...)                                                         \
-  {                                                                            \
-    fprintf(stderr, CLR_INF_MSG "INFO" CLR_RESET ": " __VA_ARGS__);            \
-    fflush(stderr);                                                            \
+#define DBG_PRINT(...)                                              \
+  {                                                                 \
+    fprintf(stderr, CLR_INF_MSG "INFO" CLR_RESET ": " __VA_ARGS__); \
+    fflush(stderr);                                                 \
   }
 #define DBG_FATAL(...) FATAL(__VA_ARGS__)
 #define DBG(x) x
@@ -90,14 +88,9 @@
 
 #define STRINGIFY(name) #name
 
-#define STRINGIFY_CASE(name)                                                   \
-  case name:                                                                   \
+#define STRINGIFY_CASE(name) \
+  case name:                 \
     return STRINGIFY(name);
-
-#define EXEC_CASE(value, expr)                                                 \
-  case value:                                                                  \
-    expr;                                                                      \
-    break;
 
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64) || defined(WIN64)
 #include <memory.h>
@@ -138,17 +131,13 @@ ssize_t getline(char **restrict lineptr, size_t *restrict n,
 
 //=:util:ascii
 
-static inline bool is_whitespace(char c) {
-  return c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n';
-}
+static inline bool is_whitespace(char c) { return c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n'; }
 
 static inline bool is_lower(char c) { return c >= 'a' && c <= 'z'; }
 
 static inline bool is_upper(char c) { return c >= 'A' && c <= 'Z'; }
 
-static inline bool is_letter(char c) {
-  return is_lower(c) || is_upper(c) || c == '_';
-}
+static inline bool is_letter(char c) { return is_lower(c) || is_upper(c) || c == '_'; }
 
 static inline bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
@@ -383,46 +372,27 @@ static inline const char *nt_stringify(Node_Type nt) {
 
 Node_Type tt_to_biop_nd(Token_Type tt) {
   switch (tt) {
-  case TT_LET:
-    return NT_BIOP_LET;
-  case TT_AND:
-    return NT_BIOP_AND;
-  case TT_ORR:
-    return NT_BIOP_ORR;
-  case TT_GRE:
-    return NT_BIOP_GRE;
-  case TT_LES:
-    return NT_BIOP_LES;
-  case TT_GEQ:
-    return NT_BIOP_GEQ;
-  case TT_LEQ:
-    return NT_BIOP_LEQ;
-  case TT_EQU:
-    return NT_BIOP_EQU;
-  case TT_NEQ:
-    return NT_BIOP_NEQ;
+  case TT_LET: return NT_BIOP_LET;
+  case TT_AND: return NT_BIOP_AND;
+  case TT_ORR: return NT_BIOP_ORR;
+  case TT_GRE: return NT_BIOP_GRE;
+  case TT_LES: return NT_BIOP_LES;
+  case TT_GEQ: return NT_BIOP_GEQ;
+  case TT_LEQ: return NT_BIOP_LEQ;
+  case TT_EQU: return NT_BIOP_EQU;
+  case TT_NEQ: return NT_BIOP_NEQ;
   case TT_ADD:
-  case TT_NOP:
-    return NT_BIOP_ADD;
+  case TT_NOP: return NT_BIOP_ADD;
   case TT_SUB:
-  case TT_NEG:
-    return NT_BIOP_SUB;
-  case TT_MUL:
-    return NT_BIOP_MUL;
-  case TT_QUO:
-    return NT_BIOP_QUO;
-  case TT_MOD:
-    return NT_BIOP_MOD;
-  case TT_POW:
-    return NT_BIOP_POW;
-  case TT_XPC:
-    return NT_BIOP_XPC;
-  case TT_SPZ:
-    return NT_BIOP_SPZ;
-  case TT_FAC:
-    return NT_BIOP_FAC;
-  case TT_LP0:
-    return NT_CALL;
+  case TT_NEG: return NT_BIOP_SUB;
+  case TT_MUL: return NT_BIOP_MUL;
+  case TT_QUO: return NT_BIOP_QUO;
+  case TT_MOD: return NT_BIOP_MOD;
+  case TT_POW: return NT_BIOP_POW;
+  case TT_XPC: return NT_BIOP_XPC;
+  case TT_SPZ: return NT_BIOP_SPZ;
+  case TT_FAC: return NT_BIOP_FAC;
+  case TT_LP0: return NT_CALL;
   default:
     FATAL("illegal biop token");
   }
@@ -437,19 +407,19 @@ typedef union {
 } Primitive;
 
 //=:runtime:assertions
-#define ASSERT_NON_NEG_INT(x, fn, what, rt, action)                            \
-  if (x < 0 && fmod(-x, 1) <= MAX_DIFF_ABS) {                                  \
-    WARNING(fn " of negative integer " what "\n");                             \
-    action;                                                                    \
-    return rt;                                                                 \
+#define ASSERT_NON_NEG_INT(x, fn, what, rt, action) \
+  if (x < 0 && fmod(-x, 1) <= MAX_DIFF_ABS) {       \
+    WARNING(fn " of negative integer " what "\n");  \
+    action;                                         \
+    return rt;                                      \
   }
 
-#define ASSERT_IMG_ZER(x, fn)                                                  \
-  if (cimag(x) != 0) {                                                         \
-    WARNING(fn                                                                 \
-            " of a number with imaginary part != 0 is not implemented yet");   \
-    rt->c = NAN;                                                               \
-    return NT_PRIM_CMX;                                                        \
+#define ASSERT_IMG_ZER(x, fn)                                                \
+  if (cimag(x) != 0) {                                                       \
+    WARNING(fn                                                               \
+            " of a number with imaginary part != 0 is not implemented yet"); \
+    rt->c = NAN;                                                             \
+    return NT_PRIM_CMX;                                                      \
   }
 
 //=:runtime:operators

@@ -247,22 +247,21 @@ void lx_next_token_factorial(Lexer *lx, bool whitespace_prefix) {
   rd_prev(&lx->rd);
 }
 
-#define LX_TRY_C(on_success_tt, fn, ...)                                       \
-  {                                                                            \
-    if (fn) {                                                                  \
-      lx->tt = on_success_tt;                                                  \
-      __VA_ARGS__;                                                             \
-      return;                                                                  \
-    }                                                                          \
+#define LX_TRY_C(on_success_tt, fn, ...) \
+  {                                      \
+    if (fn) {                            \
+      lx->tt = on_success_tt;            \
+      __VA_ARGS__;                       \
+      return;                            \
+    }                                    \
   }
 
-#define LX_LOOKUP(on_failure_tt, consumer)                                     \
-  {                                                                            \
-    rd_next_char(&lx->rd);                                                     \
-    consumer;                                                                  \
-    rd_prev(&lx->rd);                                                          \
-    lx->tt = on_failure_tt;                                                    \
-    break;                                                                     \
+#define LX_LOOKUP(on_failure_tt, consumer) \
+  {                                        \
+    rd_next_char(&lx->rd);                 \
+    consumer;                              \
+    rd_prev(&lx->rd);                      \
+    lx->tt = on_failure_tt;                \
   }
 
 void lx_next_token(Lexer *lx) {
@@ -274,35 +273,29 @@ void lx_next_token(Lexer *lx) {
   lx->tt = TT_ILL;
 
   switch (lx->rd.cch) {
-    EXEC_CASE('+', LX_LOOKUP(lx->tt = TT_NOP,
-                             LX_TRY_C(TT_ADD, is_whitespace(lx->rd.cch), )))
-    EXEC_CASE('-', LX_LOOKUP(lx->tt = TT_NEG,
-                             LX_TRY_C(TT_SPZ, lx->rd.cch == '>', )
-                                 LX_TRY_C(TT_SUB, is_whitespace(lx->rd.cch), )))
-    EXEC_CASE('*', lx->tt = TT_MUL)
-    EXEC_CASE('/', lx->tt = TT_QUO)
-    EXEC_CASE('%', lx->tt = TT_MOD)
-    EXEC_CASE('^', lx->tt = TT_POW)
-    EXEC_CASE('(', lx->tt = TT_LP0)
-    EXEC_CASE(')', lx->tt = TT_RP0)
-    EXEC_CASE(';', lx->tt = TT_XPC)
-    EXEC_CASE('\0', lx->tt = TT_EOS)
-    EXEC_CASE('!', lx_next_token_factorial(lx, whitespace_prefix))
-    EXEC_CASE('&', LX_LOOKUP(TT_ILL, LX_TRY_C(TT_AND, lx->rd.cch == '&', )))
-    EXEC_CASE('|', LX_LOOKUP(TT_ABS, LX_TRY_C(TT_ORR, lx->rd.cch == '|', )))
-    EXEC_CASE('>', LX_LOOKUP(TT_GRE, LX_TRY_C(TT_GEQ, lx->rd.cch == '=', )))
-    EXEC_CASE('<', LX_LOOKUP(TT_LES, LX_TRY_C(TT_LEQ, lx->rd.cch == '=', )))
-    EXEC_CASE('=', LX_LOOKUP(TT_LET, LX_TRY_C(TT_EQU, lx->rd.cch == '=', )))
-    EXEC_CASE('\'',
-              LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, lx->rd.cch == 'f', )
-                                    LX_TRY_C(TT_TRU, lx->rd.cch == 't', )
-                                        LX_TRY_C(TT_CMX, lx->rd.cch == 'i',
-                                                 lx->pm.c = I)))
+  case '+':  LX_LOOKUP(lx->tt = TT_NOP, LX_TRY_C(TT_ADD, is_whitespace(lx->rd.cch), )); break;
+  case '-':  LX_LOOKUP(lx->tt = TT_NEG, LX_TRY_C(TT_SPZ, lx->rd.cch == '>', ) LX_TRY_C(TT_SUB, is_whitespace(lx->rd.cch), )); break;
+  case '*':  lx->tt = TT_MUL; break;
+  case '/':  lx->tt = TT_QUO; break;
+  case '%':  lx->tt = TT_MOD; break;
+  case '^':  lx->tt = TT_POW; break;
+  case '(':  lx->tt = TT_LP0; break;
+  case ')':  lx->tt = TT_RP0; break;
+  case ';':  lx->tt = TT_XPC; break;
+  case '\0': lx->tt = TT_EOS; break;
+  case '!':  lx_next_token_factorial(lx, whitespace_prefix); break;
+  case '&':  LX_LOOKUP(TT_ILL, LX_TRY_C(TT_AND, lx->rd.cch == '&', )); break;
+  case '|':  LX_LOOKUP(TT_ABS, LX_TRY_C(TT_ORR, lx->rd.cch == '|', )); break;
+  case '>':  LX_LOOKUP(TT_GRE, LX_TRY_C(TT_GEQ, lx->rd.cch == '=', )); break;
+  case '<':  LX_LOOKUP(TT_LES, LX_TRY_C(TT_LEQ, lx->rd.cch == '=', )); break;
+  case '=':  LX_LOOKUP(TT_LET, LX_TRY_C(TT_EQU, lx->rd.cch == '=', )); break;
+  case '\'': LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, lx->rd.cch == 'f', ) LX_TRY_C(TT_TRU, lx->rd.cch == 't', ) LX_TRY_C(TT_CMX, lx->rd.cch == 'i', lx->pm.c = I)); break;
   default:
     if (is_digit(lx->rd.cch) || lx->rd.cch == '.') {
       lx_next_token_number(lx);
-    } else if (is_letter(lx->rd.cch))
+    } else if (is_letter(lx->rd.cch)) {
       lx_next_token_symbol(lx);
+    }
   }
 }
 
@@ -427,10 +420,10 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
   } while (len != 0);
 }
 
-#define nd_tree_print(nodes, node, depth, depth_max)                           \
-  {                                                                            \
-    Stack_Emu_El_nd_tree_print stack_emu[depth_max - depth + 1];               \
-    nd_tree_print(stack_emu, nodes, node, depth, depth_max);                   \
+#define nd_tree_print(nodes, node, depth, depth_max)             \
+  {                                                              \
+    Stack_Emu_El_nd_tree_print stack_emu[depth_max - depth + 1]; \
+    nd_tree_print(stack_emu, nodes, node, depth, depth_max);     \
   }
 
 //=:parser:priorities
@@ -457,31 +450,18 @@ typedef enum {
 
 bool pt_includes_tt(Priority pt, Token_Type tt) {
   switch (pt) {
-  case PT_XPC:
-    return tt == TT_XPC;
-  case PT_LET0:
-    return tt == TT_LET;
-  case PT_SPZ0:
-    return tt == TT_SPZ;
-  case PT_TEST:
-    return tt == TT_GRE || tt == TT_LES || tt == TT_GEQ || tt == TT_LEQ ||
-           tt == TT_EQU || tt == TT_NEQ;
-  case PT_ORR:
-    return tt == TT_ORR;
-  case PT_AND:
-    return tt == TT_AND;
-  case PT_ADD_SUB:
-    return tt == TT_ADD || tt == TT_NOP || tt == TT_SUB || tt == TT_NEG;
-  case PT_MUL_QUO_MOD:
-    return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
-  case PT_NOT_NOP_NEG:
-    return tt == TT_NOT || tt == TT_NEG || tt == TT_NOP;
-  case PT_POW0:
-    return tt == TT_POW;
-  case PT_FAC:
-    return tt == TT_NOT || tt == TT_FAC;
-  case PT_CAL:
-    return tt == TT_LP0;
+  case PT_XPC:         return tt == TT_XPC;
+  case PT_LET0:        return tt == TT_LET;
+  case PT_SPZ0:        return tt == TT_SPZ;
+  case PT_TEST:        return tt == TT_GRE || tt == TT_LES || tt == TT_GEQ || tt == TT_LEQ || tt == TT_EQU || tt == TT_NEQ;
+  case PT_ORR:         return tt == TT_ORR;
+  case PT_AND:         return tt == TT_AND;
+  case PT_ADD_SUB:     return tt == TT_ADD || tt == TT_NOP || tt == TT_SUB || tt == TT_NEG;
+  case PT_MUL_QUO_MOD: return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
+  case PT_NOT_NOP_NEG: return tt == TT_NOT || tt == TT_NEG || tt == TT_NOP;
+  case PT_POW0:        return tt == TT_POW;
+  case PT_FAC:         return tt == TT_NOT || tt == TT_FAC;
+  case PT_CAL:         return tt == TT_LP0;
   default:
     DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
     return false;
@@ -664,40 +644,23 @@ PR_ERR pr_next_node(Parser *pr, Node_Index *node) {
 
 PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   switch (pt) {
-  case PT_SKIP_RP0:
-    return pr_next_biop_node(pr, node, PT_XPC);
-  case PT_XPC:
-    return pr_next_biop_node(pr, node, PT_LET0);
-  case PT_LET0:
-    return pr_next_biop_node(pr, node, PT_SPZ0);
-  case PT_LET1:
-    return pr_next_biop_node(pr, node, PT_LET0);
-  case PT_SPZ0:
-    return pr_next_biop_node(pr, node, PT_ORR);
-  case PT_SPZ1:
-    return pr_next_biop_node(pr, node, PT_SPZ0);
-  case PT_ORR:
-    return pr_next_biop_node(pr, node, PT_AND);
-  case PT_AND:
-    return pr_next_biop_node(pr, node, PT_TEST);
-  case PT_TEST:
-    return pr_next_biop_node(pr, node, PT_ADD_SUB);
-  case PT_ADD_SUB:
-    return pr_next_biop_node(pr, node, PT_MUL_QUO_MOD);
-  case PT_MUL_QUO_MOD:
-    return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
-  case PT_NOT_NOP_NEG:
-    return pr_next_biop_node(pr, node, PT_POW0);
-  case PT_POW0:
-    return pr_next_biop_fact_node(pr, node, PT_FAC);
-  case PT_POW1:
-    return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
-  case PT_FAC:
-    return pr_next_biop_node(pr, node, PT_CAL);
-  case PT_CAL:
-    return pr_next_prim_node(pr, node, PT_PRIM);
-  case PT_PRIM:
-    return pr_skip_rp0(pr, node, PT_SKIP_RP0);
+  case PT_SKIP_RP0:    return pr_next_biop_node(pr, node, PT_XPC);
+  case PT_XPC:         return pr_next_biop_node(pr, node, PT_LET0);
+  case PT_LET0:        return pr_next_biop_node(pr, node, PT_SPZ0);
+  case PT_LET1:        return pr_next_biop_node(pr, node, PT_LET0);
+  case PT_SPZ0:        return pr_next_biop_node(pr, node, PT_ORR);
+  case PT_SPZ1:        return pr_next_biop_node(pr, node, PT_SPZ0);
+  case PT_ORR:         return pr_next_biop_node(pr, node, PT_AND);
+  case PT_AND:         return pr_next_biop_node(pr, node, PT_TEST);
+  case PT_TEST:        return pr_next_biop_node(pr, node, PT_ADD_SUB);
+  case PT_ADD_SUB:     return pr_next_biop_node(pr, node, PT_MUL_QUO_MOD);
+  case PT_MUL_QUO_MOD: return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
+  case PT_NOT_NOP_NEG: return pr_next_biop_node(pr, node, PT_POW0);
+  case PT_POW0:        return pr_next_biop_fact_node(pr, node, PT_FAC);
+  case PT_POW1:        return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
+  case PT_FAC:         return pr_next_biop_node(pr, node, PT_CAL);
+  case PT_CAL:         return pr_next_prim_node(pr, node, PT_PRIM);
+  case PT_PRIM:        return pr_skip_rp0(pr, node, PT_SKIP_RP0);
   }
 
   DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
@@ -759,10 +722,9 @@ IR_ERR ir_unop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
   ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
 
   switch (op) {
-    EXEC_CASE(NT_UNOP_NOP, )
-    EXEC_CASE(NT_UNOP_NOT, ir->nodes[ir->nodes_len].type =
-                               subfac_cmx(&ir->nodes[ir->nodes_len].as.pm, nhs))
-    EXEC_CASE(NT_UNOP_NEG, ir->nodes[ir->nodes_len].as.pm.c = -nhs)
+  case NT_UNOP_NOP: break;
+  case NT_UNOP_NOT: ir->nodes[ir->nodes_len].type = subfac_cmx(&ir->nodes[ir->nodes_len].as.pm, nhs); break;
+  case NT_UNOP_NEG: ir->nodes[ir->nodes_len].as.pm.c = -nhs; break;
   case NT_UNOP_ABS:
     ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
     ir->nodes[ir->nodes_len].as.pm.c = fabs(nhs);
@@ -778,7 +740,7 @@ IR_ERR ir_unop_exec_bool(Interpreter *ir, Node_Type op, bol_t nhs) {
   ir->nodes[ir->nodes_len].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_UNOP_NOT, ir->nodes[ir->nodes_len].as.pm.b = !nhs)
+  case NT_UNOP_NOT: ir->nodes[ir->nodes_len].as.pm.b = !nhs; break;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -792,10 +754,8 @@ IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
   Primitive node_a_value = ir->nodes[ir->nodes_len].as.pm;
 
   switch (node_a_type) {
-  case NT_PRIM_BOL:
-    return ir_unop_exec_bool(ir, ir->pr->nodes[src].type, node_a_value.b);
-  case NT_PRIM_CMX:
-    return ir_unop_exec_ncmx(ir, ir->pr->nodes[src].type, node_a_value.c);
+  case NT_PRIM_BOL: return ir_unop_exec_bool(ir, ir->pr->nodes[src].type, node_a_value.b);
+  case NT_PRIM_CMX: return ir_unop_exec_ncmx(ir, ir->pr->nodes[src].type, node_a_value.c);
   default:
     return IR_ERR_NUM_ARG_EXPECTED;
   }
@@ -815,12 +775,13 @@ IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs,
   } else if (creal(lhs) == 0 && creal(rhs) == 0) {
     ra = cimag(lhs);
     rb = cimag(rhs);
-  } else
+  } else {
     return IR_ERR_NOT_DEFINED_FOR_TYPE;
+  }
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_GRE, ir->nodes[ir->nodes_len].as.pm.b = ra > rb)
-    EXEC_CASE(NT_BIOP_LES, ir->nodes[ir->nodes_len].as.pm.b = ra < rb)
+  case NT_BIOP_GRE: ir->nodes[ir->nodes_len].as.pm.b = ra > rb; break;
+  case NT_BIOP_LES: ir->nodes[ir->nodes_len].as.pm.b = ra < rb; break;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -832,12 +793,11 @@ IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
   ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_ADD, ir->nodes[ir->nodes_len].as.pm.c = lhs + rhs)
-    EXEC_CASE(NT_BIOP_SUB, ir->nodes[ir->nodes_len].as.pm.c = lhs - rhs)
-    EXEC_CASE(NT_BIOP_MUL, ir->nodes[ir->nodes_len].as.pm.c = lhs * rhs)
-    EXEC_CASE(NT_BIOP_POW, ir->nodes[ir->nodes_len].as.pm.c = pow(lhs, rhs))
-    EXEC_CASE(NT_BIOP_FAC, ir->nodes[ir->nodes_len].type = fac_cmx(
-                               &ir->nodes[ir->nodes_len].as.pm, lhs, rhs))
+  case NT_BIOP_ADD: ir->nodes[ir->nodes_len].as.pm.c = lhs + rhs; break;
+  case NT_BIOP_SUB: ir->nodes[ir->nodes_len].as.pm.c = lhs - rhs; break;
+  case NT_BIOP_MUL: ir->nodes[ir->nodes_len].as.pm.c = lhs * rhs; break;
+  case NT_BIOP_POW: ir->nodes[ir->nodes_len].as.pm.c = pow(lhs, rhs); break;
+  case NT_BIOP_FAC: ir->nodes[ir->nodes_len].type = fac_cmx(&ir->nodes[ir->nodes_len].as.pm, lhs, rhs); break;
   case NT_BIOP_QUO:
     if (rhs == 0)
       return IR_ERR_DIV_BY_ZERO;
@@ -861,15 +821,14 @@ IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
   ir->nodes[ir->nodes_len].type = NT_PRIM_BOL;
 
   switch (op) {
-    EXEC_CASE(NT_BIOP_ORR, ir->nodes[ir->nodes_len].as.pm.b = lhs || rhs)
-    EXEC_CASE(NT_BIOP_AND, ir->nodes[ir->nodes_len].as.pm.b = lhs && rhs)
-    EXEC_CASE(NT_BIOP_EQU, ir->nodes[ir->nodes_len].as.pm.b = lhs == rhs)
-    EXEC_CASE(NT_BIOP_NEQ, ir->nodes[ir->nodes_len].as.pm.b = lhs != rhs)
+  case NT_BIOP_ORR: ir->nodes[ir->nodes_len].as.pm.b = lhs || rhs; break;
+  case NT_BIOP_AND: ir->nodes[ir->nodes_len].as.pm.b = lhs && rhs; break;
+  case NT_BIOP_EQU: ir->nodes[ir->nodes_len].as.pm.b = lhs == rhs; break;
+  case NT_BIOP_NEQ: ir->nodes[ir->nodes_len].as.pm.b = lhs != rhs; break;
   case NT_BIOP_GRE:
   case NT_BIOP_LES:
   case NT_BIOP_GEQ:
-  case NT_BIOP_LEQ:
-    return IR_ERR_NOT_DEFINED_FOR_TYPE;
+  case NT_BIOP_LEQ: return IR_ERR_NOT_DEFINED_FOR_TYPE;
   default:
     return IR_ERR_ILL_NT;
   }
@@ -900,62 +859,24 @@ IR_ERR ir_call_exec_builtin_cmx(Interpreter *ir, sym_t fn, cmx_t arg) {
   ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
 
   switch (fn) {
-  case EC_SQRT:
-    ir->nodes[ir->nodes_len].as.pm.c = sqrt(arg);
-    break;
-  case EC_CEIL:
-    ir->nodes[ir->nodes_len].as.pm.c = ceil(creal(arg)) + ceil(cimag(arg)) * I;
-    break;
-  case EC_ROUND:
-    ir->nodes[ir->nodes_len].as.pm.c =
-        round(creal(arg)) + round(cimag(arg)) * I;
-    break;
-  case EC_FLOOR:
-    ir->nodes[ir->nodes_len].as.pm.c =
-        floor(creal(arg)) + floor(cimag(arg)) * I;
-    break;
-  case EC_LN:
-    ir->nodes[ir->nodes_len].as.pm.c = log(arg);
-    break;
-  case EC_EXP:
-    ir->nodes[ir->nodes_len].as.pm.c = exp(arg);
-    break;
-  case EC_COS:
-    ir->nodes[ir->nodes_len].as.pm.c = cos(arg);
-    break;
-  case EC_SIN:
-    ir->nodes[ir->nodes_len].as.pm.c = sin(arg);
-    break;
-  case EC_TAN:
-    ir->nodes[ir->nodes_len].as.pm.c = tan(arg);
-    break;
-  case EC_COSH:
-    ir->nodes[ir->nodes_len].as.pm.c = cosh(arg);
-    break;
-  case EC_SINH:
-    ir->nodes[ir->nodes_len].as.pm.c = sinh(arg);
-    break;
-  case EC_TANH:
-    ir->nodes[ir->nodes_len].as.pm.c = tanh(arg);
-    break;
-  case EC_ACOS:
-    ir->nodes[ir->nodes_len].as.pm.c = acos(arg);
-    break;
-  case EC_ASIN:
-    ir->nodes[ir->nodes_len].as.pm.c = asin(arg);
-    break;
-  case EC_ATAN:
-    ir->nodes[ir->nodes_len].as.pm.c = atan(arg);
-    break;
-  case EC_ACOSH:
-    ir->nodes[ir->nodes_len].as.pm.c = acosh(arg);
-    break;
-  case EC_ASINH:
-    ir->nodes[ir->nodes_len].as.pm.c = asinh(arg);
-    break;
-  case EC_ATANH:
-    ir->nodes[ir->nodes_len].as.pm.c = atanh(arg);
-    break;
+  case EC_SQRT:  ir->nodes[ir->nodes_len].as.pm.c = sqrt(arg); break;
+  case EC_CEIL:  ir->nodes[ir->nodes_len].as.pm.c = ceil(creal(arg)) + ceil(cimag(arg)) * I; break;
+  case EC_ROUND: ir->nodes[ir->nodes_len].as.pm.c = round(creal(arg)) + round(cimag(arg)) * I; break;
+  case EC_FLOOR: ir->nodes[ir->nodes_len].as.pm.c = floor(creal(arg)) + floor(cimag(arg)) * I; break;
+  case EC_LN:    ir->nodes[ir->nodes_len].as.pm.c = log(arg); break;
+  case EC_EXP:   ir->nodes[ir->nodes_len].as.pm.c = exp(arg); break;
+  case EC_COS:   ir->nodes[ir->nodes_len].as.pm.c = cos(arg); break;
+  case EC_SIN:   ir->nodes[ir->nodes_len].as.pm.c = sin(arg); break;
+  case EC_TAN:   ir->nodes[ir->nodes_len].as.pm.c = tan(arg); break;
+  case EC_COSH:  ir->nodes[ir->nodes_len].as.pm.c = cosh(arg); break;
+  case EC_SINH:  ir->nodes[ir->nodes_len].as.pm.c = sinh(arg); break;
+  case EC_TANH:  ir->nodes[ir->nodes_len].as.pm.c = tanh(arg); break;
+  case EC_ACOS:  ir->nodes[ir->nodes_len].as.pm.c = acos(arg); break;
+  case EC_ASIN:  ir->nodes[ir->nodes_len].as.pm.c = asin(arg); break;
+  case EC_ATAN:  ir->nodes[ir->nodes_len].as.pm.c = atan(arg); break;
+  case EC_ACOSH: ir->nodes[ir->nodes_len].as.pm.c = acosh(arg); break;
+  case EC_ASINH: ir->nodes[ir->nodes_len].as.pm.c = asinh(arg); break;
+  case EC_ATANH: ir->nodes[ir->nodes_len].as.pm.c = atanh(arg); break;
   default:
     return IR_ERR_NOT_DEFINED_SYMBOL;
   }
@@ -1007,20 +928,6 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
 
 IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   switch (ir->pr->nodes[src].type) {
-  case NT_PRIM_SYM:
-    if (sym_exec) {
-      if (!MAP_GET(ir->global, ir->global_cap, ir->pr->nodes[src].as.pm.s,
-                   &ir->nodes[ir->nodes_len]))
-        return IR_ERR_NOT_DEFINED_SYMBOL;
-      return IR_ERR_NOERROR;
-    }
-    // TODO: replace with [[fallthrough]]; (supported only from c23)
-    ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
-    return IR_ERR_NOERROR;
-  case NT_PRIM_CMX:
-  case NT_PRIM_BOL:
-    ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
-    return IR_ERR_NOERROR;
   case NT_UNOP_NOT:
   case NT_UNOP_NOP:
   case NT_UNOP_NEG:
@@ -1046,6 +953,20 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_BIOP_FAC:
   case NT_CALL:
     return ir_biop_exec(ir, src);
+  case NT_PRIM_SYM:
+    if (sym_exec) {
+      if (!MAP_GET(ir->global, ir->global_cap, ir->pr->nodes[src].as.pm.s,
+                   &ir->nodes[ir->nodes_len]))
+        return IR_ERR_NOT_DEFINED_SYMBOL;
+      return IR_ERR_NOERROR;
+    }
+    // TODO: replace with [[fallthrough]]; (supported only from c23)
+    ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
+    return IR_ERR_NOERROR;
+  case NT_PRIM_CMX:
+  case NT_PRIM_BOL:
+    ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
+    return IR_ERR_NOERROR;
   }
 
   return IR_ERR_ILL_NT;
