@@ -101,4 +101,5 @@
 
 #define NODE_BUF_SIZE (1 << 20)
 
-#define GLOBAL_SCOPE_CAPACITY (256)
+// must be not 2^n
+#define GLOBAL_SCOPE_CAPACITY (255)

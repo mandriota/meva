@@ -26,6 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+// NOTE: after removing hash function, size must be not equal to 2^n
+
 //=:util:memory
 
 // align - returns aligned memory;
@@ -38,22 +40,6 @@
  */
 static inline size_t align(size_t sz, size_t alignment) {
   return (sz + alignment - 1) & ~(alignment - 1);
-}
-
-//=:util:hash
-
-// murmur_hash64 - returns hash of key;
-/*@ ensures \result == 0 <==> key == 0;
-  @ ensures \result != 0 <==> key != 0;
-  @ assigns \nothing;
- */
-static uint64_t murmur_hash64(uint64_t key) {
-  key ^= key >> 33;
-  key *= 0xff51afd7ed558ccd;
-  key ^= key >> 33;
-  key *= 0xc4ceb9fe1a85ec53;
-  key ^= key >> 33;
-  return key;
 }
 
 //=:hmap:hmap
@@ -92,7 +78,7 @@ typedef struct {
 //=:hmap:get
 static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
-  size_t index = murmur_hash64(key) % entries_cap;
+  size_t index = key % entries_cap;
   size_t steps = 0;
 
   size_t entry_len =
@@ -113,7 +99,7 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
   return false;
 }
 
-#define MAP_GET(entries, cap, key, val)                                        \
+#define MAP_GET(entries, cap, key, val) \
   map_get(entries, cap, key, val, sizeof(*val))
 
 #define SET_GET(entries, cap, key) map_get(entries, cap, key, NULL, 0)
@@ -140,7 +126,7 @@ static inline bool map_get(Map_Entry *restrict entries, size_t entries_cap,
 //=:hmap:set
 static inline bool map_set(Map_Entry *restrict entries, size_t entries_cap,
                            uint64_t key, void *restrict val, size_t val_sz) {
-  size_t index = murmur_hash64(key) % entries_cap;
+  size_t index = key % entries_cap;
   size_t steps = 0;
 
   size_t entry_len =
@@ -162,9 +148,40 @@ static inline bool map_set(Map_Entry *restrict entries, size_t entries_cap,
   return false;
 }
 
-#define MAP_SET(entries, cap, key, val)                                        \
+#define MAP_SET(entries, cap, key, val) \
   map_set(entries, cap, key, val, sizeof(*val))
 
 #define SET_SET(entries, cap, key) map_set(entries, cap, key, NULL, 0)
+
+//=:hmap:pop:acsl
+// map_pop - sets \*entries.key to 0 where key = entries.key;
+// must be called in reversed order of corresponding keys setting.
+/* TODO: add ACSL annotation
+*/
+//=:hmap:pop
+static inline bool map_pop(Map_Entry *restrict entries, size_t entries_cap,
+                           uint64_t key, size_t val_sz) {
+  size_t index = key % entries_cap;
+  size_t steps = 0;
+
+  size_t entry_len =
+      align(sizeof(Map_Entry) + val_sz, sizeof(Map_Entry)) / sizeof(Map_Entry);
+
+  do {
+    Map_Entry *entry = &entries[index * entry_len];
+
+    if (entry->key == key) {
+      entry->key = 0;
+      return true;
+    }
+
+    index = (index + 1) % entries_cap;
+    ++steps;
+  } while (steps < entries_cap);
+
+  return false;
+}
+
+#define SET_POP(entries, cap, key) map_pop(entries, cap, key, 0)
 
 #endif

@@ -682,6 +682,7 @@ typedef enum {
   IR_ERR_NOT_DEFINED_FOR_TYPE,
   IR_ERR_NOT_DEFINED_SYMBOL,
   IR_ERR_NOT_IMPLEMENTED,
+  IR_ERR_ALLOC_FAILED,
   IR_ERR_AST_MEMORY_NOT_ENOUGH,
   IR_ERR_SYM_MEMORY_NOT_ENOUGH,
 } IR_ERR;
@@ -695,6 +696,7 @@ const char *ir_err_stringify(IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_FOR_TYPE)
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_SYMBOL)
     STRINGIFY_CASE(IR_ERR_NOT_IMPLEMENTED)
+    STRINGIFY_CASE(IR_ERR_ALLOC_FAILED)
     STRINGIFY_CASE(IR_ERR_AST_MEMORY_NOT_ENOUGH)
     STRINGIFY_CASE(IR_ERR_SYM_MEMORY_NOT_ENOUGH)
   }
@@ -909,55 +911,6 @@ IR_ERR ir_list_exec(Interpreter *ir, Node_Index src) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_tree_save(Interpreter *ir, Node_Index src) {
-  Node_Index root = ir->nodes_len;
-
-  ir->nodes[root].type = ir->pr->nodes[src].type;
-
-  switch (ir->pr->nodes[src].type) {
-  case NT_PRIM_SYM:
-  case NT_PRIM_CMX:
-  case NT_PRIM_BOL:
-    ir->nodes[root] = ir->pr->nodes[src];
-    return IR_ERR_NOERROR;
-  case NT_BIOP_LET:
-  case NT_BIOP_AND:
-  case NT_BIOP_ORR:
-  case NT_BIOP_GRE:
-  case NT_BIOP_LES:
-  case NT_BIOP_GEQ:
-  case NT_BIOP_LEQ:
-  case NT_BIOP_EQU:
-  case NT_BIOP_NEQ:
-  case NT_BIOP_ADD:
-  case NT_BIOP_SUB:
-  case NT_BIOP_MUL:
-  case NT_BIOP_QUO:
-  case NT_BIOP_MOD:
-  case NT_BIOP_POW:
-  case NT_BIOP_XPC:
-  case NT_BIOP_SPZ:
-  case NT_BIOP_FAC:
-  case NT_CALL:
-    ir_nd_reserve(ir);
-    ir->nodes[root].as.bp.lhs = ir->nodes_len;
-    ir_tree_save(ir, ir->pr->nodes[src].as.bp.lhs);
-
-    ir_nd_reserve(ir);
-    ir->nodes[root].as.bp.rhs = ir->nodes_len;
-    ir_tree_save(ir, ir->pr->nodes[src].as.bp.rhs);
-  case NT_UNOP_ABS:
-  case NT_UNOP_NOT:
-  case NT_UNOP_NEG:
-  case NT_UNOP_NOP:
-    ir_nd_reserve(ir);
-    ir->nodes[root].as.up.nhs = ir->nodes_len;
-    ir_tree_save(ir, ir->pr->nodes[src].as.up.nhs);
-  }
-
-  return IR_ERR_NOERROR;
-}
-
 IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs,
                       ir->pr->nodes[src].type != NT_BIOP_LET &&
@@ -965,15 +918,9 @@ IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
   Node lhs = {.type = ir->nodes[ir->nodes_len].type,
               .as.pm = ir->nodes[ir->nodes_len].as.pm};
 
-  if (ir->pr->nodes[src].type == NT_BIOP_XPC)
-    TRY(IR_ERR, ir_nd_reserve(ir));
-
   TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
   Node rhs = {.type = ir->nodes[ir->nodes_len].type,
               .as.pm = ir->nodes[ir->nodes_len].as.pm};
-
-  if (ir->pr->nodes[src].type == NT_BIOP_XPC)
-    return IR_ERR_NOERROR;
 
   if (ir->pr->nodes[src].type == NT_BIOP_LET && lhs.type == NT_PRIM_SYM) {
     if (!MAP_SET(ir->global, ir->global_cap, lhs.as.pm.s, &rhs))
@@ -1011,8 +958,6 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
     return ir_unop_exec(ir, src);
   case NT_BIOP_XPC:
     return ir_list_exec(ir, src);
-  case NT_BIOP_SPZ:
-    return ir_tree_save(ir, src);
   case NT_BIOP_LET:
   case NT_BIOP_AND:
   case NT_BIOP_ORR:
@@ -1034,8 +979,9 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_PRIM_SYM:
     if (sym_exec) {
       if (!MAP_GET(ir->global, ir->global_cap, ir->pr->nodes[src].as.pm.s,
-                   &ir->nodes[ir->nodes_len]))
+                   &ir->nodes[ir->nodes_len])) {
         return IR_ERR_NOT_DEFINED_SYMBOL;
+      }
       return IR_ERR_NOERROR;
     }
     // TODO: replace with [[fallthrough]]; (supported only from c23)
@@ -1045,6 +991,8 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_PRIM_BOL:
     ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
     return IR_ERR_NOERROR;
+	case NT_BIOP_SPZ:
+		return IR_ERR_NOT_IMPLEMENTED;
   }
 
   return IR_ERR_ILL_NT;
