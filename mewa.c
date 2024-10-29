@@ -578,44 +578,47 @@ PR_ERR pr_next_unop_node(Parser *pr, Node_Index *node, Priority pt) {
   return pr_call(pr, node, pt);
 }
 
-PR_ERR pr_next_biop_node(Parser *pr, Node_Index *node, Priority pt) {
-  TRY(PR_ERR, pr_call(pr, node, pt));
+PR_ERR pr_next_biop_node(Parser *pr, Node_Index *lhs, Priority pt) {
+  TRY(PR_ERR, pr_call(pr, lhs, pt));
 
-  Node_Index node_tmp;
+  Node_Index op, rhs;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
-    TRY(PR_ERR, pr_nd_alloc(pr, &node_tmp));
-    pr->nodes[node_tmp].type = tt_to_biop_nd(pr->lx.tt);
-    pr->nodes[node_tmp].as.bp.lhs = *node;
-    TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[node_tmp].as.bp.rhs));
+    TRY(PR_ERR, pr_nd_alloc(pr, &rhs));
+		TRY(PR_ERR, pr_nd_alloc(pr, &op));
+
+    pr->nodes[op].type = tt_to_biop_nd(pr->lx.tt);
+    pr->nodes[op].as.bp.lhs = *lhs;
+    pr->nodes[op].as.bp.rhs = rhs;
 
     if (pr->lx.tt != TT_LP0)
       lx_next_token(&pr->lx);
-    TRY(PR_ERR,
-        pr_call(pr, &pr->nodes[node_tmp].as.bp.rhs, pt + pt_rl_biop(pt)));
+    TRY(PR_ERR, pr_call(pr, &pr->nodes[op].as.bp.rhs, pt + pt_rl_biop(pt)));
 
-    *node = node_tmp;
+    *lhs = op;
   }
 
   return PR_ERR_NOERROR;
 }
 
-PR_ERR pr_next_biop_fact_node(Parser *pr, Node_Index *node, Priority pt) {
-  TRY(PR_ERR, pr_call(pr, node, pt));
+PR_ERR pr_next_biop_fact_node(Parser *pr, Node_Index *lhs, Priority pt) {
+  TRY(PR_ERR, pr_call(pr, lhs, pt));
 
-  Node_Index node_tmp;
+  Node_Index op, rhs;
 
   if (pt_includes_tt(pt, pr->lx.tt)) {
-    TRY(PR_ERR, pr_nd_alloc(pr, &node_tmp));
-    pr->nodes[node_tmp].type = NT_BIOP_FAC;
-    pr->nodes[node_tmp].as.bp.lhs = *node;
-
-    TRY(PR_ERR, pr_nd_alloc(pr, &pr->nodes[node_tmp].as.bp.rhs));
-    pr->nodes[pr->nodes[node_tmp].as.bp.rhs].type = NT_PRIM_CMX;
-    pr->nodes[pr->nodes[node_tmp].as.bp.rhs].as.pm.c = pr->lx.pm.c;
+		TRY(PR_ERR, pr_nd_alloc(pr, &rhs));
+    TRY(PR_ERR, pr_nd_alloc(pr, &op));
+		
+    pr->nodes[op].type = NT_BIOP_FAC;
+    pr->nodes[op].as.bp.lhs = *lhs;
+		pr->nodes[op].as.bp.rhs = rhs;
+    pr->nodes[rhs].type = NT_PRIM_CMX;
+    pr->nodes[rhs].as.pm.c = pr->lx.pm.c;
+		
     lx_next_token(&pr->lx);
 
-    *node = node_tmp;
+    *lhs = op;
   }
 
   return PR_ERR_NOERROR;
@@ -991,8 +994,8 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_PRIM_BOL:
     ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
     return IR_ERR_NOERROR;
-	case NT_BIOP_SPZ:
-		return IR_ERR_NOT_IMPLEMENTED;
+  case NT_BIOP_SPZ:
+    return IR_ERR_NOT_IMPLEMENTED;
   }
 
   return IR_ERR_ILL_NT;
