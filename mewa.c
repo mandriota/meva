@@ -582,18 +582,20 @@ PR_ERR pr_next_biop_node(Parser *pr, Node_Index *lhs, Priority pt) {
   TRY(PR_ERR, pr_call(pr, lhs, pt));
 
   Node_Index op, rhs;
+	Token_Type op_tt;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
+		op_tt = pr->lx.tt;
     TRY(PR_ERR, pr_nd_alloc(pr, &rhs));
-		TRY(PR_ERR, pr_nd_alloc(pr, &op));
-
-    pr->nodes[op].type = tt_to_biop_nd(pr->lx.tt);
-    pr->nodes[op].as.bp.lhs = *lhs;
-    pr->nodes[op].as.bp.rhs = rhs;
 
     if (pr->lx.tt != TT_LP0)
       lx_next_token(&pr->lx);
-    TRY(PR_ERR, pr_call(pr, &pr->nodes[op].as.bp.rhs, pt + pt_rl_biop(pt)));
+    TRY(PR_ERR, pr_call(pr, &rhs, pt + pt_rl_biop(pt)));
+
+		TRY(PR_ERR, pr_nd_alloc(pr, &op));
+    pr->nodes[op].type = tt_to_biop_nd(op_tt);
+    pr->nodes[op].as.bp.lhs = *lhs;
+		pr->nodes[op].as.bp.rhs = rhs;
 
     *lhs = op;
   }
@@ -994,8 +996,8 @@ IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
   case NT_PRIM_BOL:
     ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
     return IR_ERR_NOERROR;
-  case NT_BIOP_SPZ:
-    return IR_ERR_NOT_IMPLEMENTED;
+	case NT_BIOP_SPZ:
+		return IR_ERR_NOT_IMPLEMENTED;
   }
 
   return IR_ERR_ILL_NT;
