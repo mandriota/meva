@@ -36,6 +36,7 @@
 
 #include <assert.h>
 #include <complex.h>
+#include <math.h>
 #include <stdbool.h> // IWYU pragma: keep
 #include <stdint.h>
 #include <stdio.h>
@@ -164,19 +165,25 @@ typedef struct {
   Reader rd;
 
   Token_Type tt;
+  float rel_err;
   Primitive pm;
 } Lexer;
 
-double lx_read_integer(Lexer *lx, double *log10) {
+double lx_read_integer(Lexer *lx, double *log10, float *rel_err) {
+  long long test_integer = 0;
   double integer = 0;
   *log10 = 0;
 
   while (is_digit(lx->rd.cch)) {
+    test_integer = test_integer * 10 + lx->rd.cch - '0';
     integer = integer * 10 + lx->rd.cch - '0';
     *log10 += 1;
 
     rd_next_char(&lx->rd);
   }
+
+  if (rel_err != NULL && integer < ldexp(1, 63) && integer != 0)
+    *rel_err = fabs((((long long)integer) - test_integer) / integer);
 
   return integer;
 }
@@ -184,17 +191,25 @@ double lx_read_integer(Lexer *lx, double *log10) {
 void lx_next_token_number(Lexer *lx) {
   lx->tt = TT_ILL;
 
+  lx->rel_err = 0;
+
   double decimal, decimal_log10, integer_log10;
-  lx->pm.c = lx_read_integer(lx, &integer_log10);
+  lx->pm.c = lx_read_integer(lx, &integer_log10, &lx->rel_err);
 
   if (lx->rd.cch == '.') {
     rd_next_char(&lx->rd);
 
-    decimal = lx_read_integer(lx, &decimal_log10);
+    decimal = lx_read_integer(lx, &decimal_log10, NULL);
     if (decimal_log10 == 0 && integer_log10 == 0)
       return;
     lx->pm.c += (double)decimal / pow(10, decimal_log10);
+
+    lx->rel_err += (float)((nextafter(creal(lx->pm.c), INFINITY) - creal(lx->pm.c)) / creal(lx->pm.c));
   }
+
+  DBG_PRINT("rel_err: %e\n", lx->rel_err);
+
+  //  lx->rel_err = pow(10, -15);
 
   lx->tt = TT_CMX;
 
@@ -274,7 +289,7 @@ void lx_next_token(Lexer *lx) {
   lx->tt = TT_ILL;
 
   switch (lx->rd.cch) {
-  case '+':  LX_LOOKUP(lx->tt = TT_NOP, LX_TRY_C(TT_ADD, is_whitespace(lx->rd.cch), )); break;
+  case '+':  LX_LOOKUP(lx->tt = TT_NOP, LX_TRY_C(TT_ADD, is_whitespace(lx->rd.cch), ) LX_TRY_C(TT_APX, lx->rd.cch == '/', )); break;
   case '-':  LX_LOOKUP(lx->tt = TT_NEG, LX_TRY_C(TT_SPZ, lx->rd.cch == '>', ) LX_TRY_C(TT_SUB, is_whitespace(lx->rd.cch), )); break;
   case '*':  lx->tt = TT_MUL; break;
   case '/':  lx->tt = TT_QUO; break;
@@ -285,12 +300,10 @@ void lx_next_token(Lexer *lx) {
   case ';':  lx->tt = TT_XPC; break;
   case '\0': lx->tt = TT_EOS; break;
   case '!':  lx_next_token_factorial(lx, whitespace_prefix); break;
-  case '&':  LX_LOOKUP(TT_ILL, LX_TRY_C(TT_AND, lx->rd.cch == '&', )); break;
-  case '|':  LX_LOOKUP(TT_ABS, LX_TRY_C(TT_ORR, lx->rd.cch == '|', )); break;
+  case '|':  lx->tt = TT_ABS; break;
   case '>':  LX_LOOKUP(TT_GRE, LX_TRY_C(TT_GEQ, lx->rd.cch == '=', )); break;
   case '<':  LX_LOOKUP(TT_LES, LX_TRY_C(TT_LEQ, lx->rd.cch == '=', )); break;
   case '=':  LX_LOOKUP(TT_LET, LX_TRY_C(TT_EQU, lx->rd.cch == '=', )); break;
-  case '\'': LX_LOOKUP(TT_ILL, LX_TRY_C(TT_FAL, lx->rd.cch == 'f', ) LX_TRY_C(TT_TRU, lx->rd.cch == 't', )); break;
   case 'i':
     lx->tt = TT_CMX;
     lx->pm.c = I;
@@ -319,7 +332,8 @@ typedef struct {
 } Bi_Op;
 
 struct Node {
-  Node_Type type;
+  Node_Type type : 16;
+  float rel_err;
 
   union {
     Primitive pm;
@@ -333,15 +347,25 @@ typedef struct {
   Node_Index depth;
 } Stack_Emu_El_nd_tree_print;
 
-void nd_tree_print_cmx(cmx_t cmx) {
+void nd_tree_print_cmx(cmx_t cmx, float rel_err) {
   if (creal(cmx) != 0 && cimag(cmx) != 0) {
-    printf(CLR_PRIM "%lf %lfi\n" CLR_RESET, creal(cmx), cimag(cmx));
+    printf(CLR_PRIM "%lf %lfi", creal(cmx), cimag(cmx));
   } else if (creal(cmx) == 0 && cimag(cmx) == 0) {
-    printf(CLR_PRIM "0\n" CLR_RESET);
+    printf(CLR_PRIM "0");
   } else if (creal(cmx) != 0) {
-    printf(CLR_PRIM "%lf\n" CLR_RESET, creal(cmx));
+    printf(CLR_PRIM "%lf", creal(cmx));
   } else if (cimag(cmx) != 0)
-    printf(CLR_PRIM "%lfi\n" CLR_RESET, cimag(cmx));
+    printf(CLR_PRIM "%lfi", cimag(cmx));
+
+  if (rel_err != 0) {
+    double abs_err = (double)rel_err * fabs(cmx);
+    printf(
+        CLR_RESET " +/- " CLR_PRIM "%f" CLR_RESET
+                  "*" CLR_PRIM "10" CLR_RESET "^" CLR_PRIM "%f\n" CLR_RESET,
+        abs_err / pow(10, floor(log10(abs_err))), floor(log10(abs_err)));
+  } else {
+    printf("\n" CLR_RESET);
+  }
 }
 
 void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
@@ -370,17 +394,9 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
                nodes[node].as.pm.s);
         goto while2_final;
       case NT_PRIM_CMX:
-        nd_tree_print_cmx(nodes[node].as.pm.c);
-        goto while2_final;
-      case NT_PRIM_BOL:
-        if (nodes[node].as.pm.b) {
-          printf(CLR_PRIM "true\n" CLR_RESET);
-        } else
-          printf(CLR_PRIM "false\n" CLR_RESET);
+        nd_tree_print_cmx(nodes[node].as.pm.c, nodes[node].rel_err);
         goto while2_final;
       case NT_BIOP_LET:
-      case NT_BIOP_AND:
-      case NT_BIOP_ORR:
       case NT_BIOP_GRE:
       case NT_BIOP_LES:
       case NT_BIOP_GEQ:
@@ -389,6 +405,7 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
       case NT_BIOP_NEQ:
       case NT_BIOP_ADD:
       case NT_BIOP_SUB:
+      case NT_BIOP_APX:
       case NT_BIOP_MUL:
       case NT_BIOP_QUO:
       case NT_BIOP_MOD:
@@ -441,15 +458,13 @@ typedef enum {
   PT_TEST,
   PT_SPZ0,
   PT_SPZ1,
-  PT_ORR,
-  PT_AND,
   PT_ADD_SUB,
   PT_MUL_QUO_MOD,
   PT_NOT_NOP_NEG,
   PT_POW0,
   PT_POW1,
   PT_FAC,
-  PT_CAL,
+  PT_CAL_APX,
   PT_PRIM,
 } Priority;
 
@@ -459,14 +474,12 @@ bool pt_includes_tt(Priority pt, Token_Type tt) {
   case PT_LET0:        return tt == TT_LET;
   case PT_SPZ0:        return tt == TT_SPZ;
   case PT_TEST:        return tt == TT_GRE || tt == TT_LES || tt == TT_GEQ || tt == TT_LEQ || tt == TT_EQU || tt == TT_NEQ;
-  case PT_ORR:         return tt == TT_ORR;
-  case PT_AND:         return tt == TT_AND;
   case PT_ADD_SUB:     return tt == TT_ADD || tt == TT_NOP || tt == TT_SUB || tt == TT_NEG;
   case PT_MUL_QUO_MOD: return tt == TT_MUL || tt == TT_QUO || tt == TT_MOD;
   case PT_NOT_NOP_NEG: return tt == TT_NOT || tt == TT_NEG || tt == TT_NOP;
   case PT_POW0:        return tt == TT_POW;
   case PT_FAC:         return tt == TT_NOT || tt == TT_FAC;
-  case PT_CAL:         return tt == TT_LP0;
+  case PT_CAL_APX:     return tt == TT_LP0 || tt == TT_APX;
   default:
     DBG_FATAL("%s: unknown priority: %d\n", __func__, pt);
     return false;
@@ -535,12 +548,7 @@ PR_ERR pr_next_prim_node(Parser *pr, Node_Index *node, Priority pt) {
   case TT_CMX:
     pr->nodes[*node].type = NT_PRIM_CMX;
     pr->nodes[*node].as.pm.c = pr->lx.pm.c;
-    lx_next_token(&pr->lx);
-    break;
-  case TT_TRU:
-  case TT_FAL:
-    pr->nodes[*node].type = NT_PRIM_BOL;
-    pr->nodes[*node].as.pm.b = pr->lx.tt == TT_TRU;
+    pr->nodes[*node].rel_err = pr->lx.rel_err;
     lx_next_token(&pr->lx);
     break;
   case TT_ABS:
@@ -582,20 +590,20 @@ PR_ERR pr_next_biop_node(Parser *pr, Node_Index *lhs, Priority pt) {
   TRY(PR_ERR, pr_call(pr, lhs, pt));
 
   Node_Index op, rhs;
-	Token_Type op_tt;
+  Token_Type op_tt;
 
   while (pt_includes_tt(pt, pr->lx.tt)) {
-		op_tt = pr->lx.tt;
+    op_tt = pr->lx.tt;
     TRY(PR_ERR, pr_nd_alloc(pr, &rhs));
 
     if (pr->lx.tt != TT_LP0)
       lx_next_token(&pr->lx);
     TRY(PR_ERR, pr_call(pr, &rhs, pt + pt_rl_biop(pt)));
 
-		TRY(PR_ERR, pr_nd_alloc(pr, &op));
+    TRY(PR_ERR, pr_nd_alloc(pr, &op));
     pr->nodes[op].type = tt_to_biop_nd(op_tt);
     pr->nodes[op].as.bp.lhs = *lhs;
-		pr->nodes[op].as.bp.rhs = rhs;
+    pr->nodes[op].as.bp.rhs = rhs;
 
     *lhs = op;
   }
@@ -609,15 +617,16 @@ PR_ERR pr_next_biop_fact_node(Parser *pr, Node_Index *lhs, Priority pt) {
   Node_Index op, rhs;
 
   if (pt_includes_tt(pt, pr->lx.tt)) {
-		TRY(PR_ERR, pr_nd_alloc(pr, &rhs));
+    TRY(PR_ERR, pr_nd_alloc(pr, &rhs));
     TRY(PR_ERR, pr_nd_alloc(pr, &op));
-		
+
     pr->nodes[op].type = NT_BIOP_FAC;
     pr->nodes[op].as.bp.lhs = *lhs;
-		pr->nodes[op].as.bp.rhs = rhs;
+    pr->nodes[op].as.bp.rhs = rhs;
     pr->nodes[rhs].type = NT_PRIM_CMX;
     pr->nodes[rhs].as.pm.c = pr->lx.pm.c;
-		
+    pr->nodes[rhs].rel_err = 0;
+
     lx_next_token(&pr->lx);
 
     *lhs = op;
@@ -658,18 +667,16 @@ PR_ERR pr_call(Parser *pr, Node_Index *node, Priority pt) {
   case PT_XPC:         return pr_next_biop_node(pr, node, PT_LET0);
   case PT_LET0:        return pr_next_biop_node(pr, node, PT_SPZ0);
   case PT_LET1:        return pr_next_biop_node(pr, node, PT_LET0);
-  case PT_SPZ0:        return pr_next_biop_node(pr, node, PT_ORR);
+  case PT_SPZ0:        return pr_next_biop_node(pr, node, PT_TEST);
   case PT_SPZ1:        return pr_next_biop_node(pr, node, PT_SPZ0);
-  case PT_ORR:         return pr_next_biop_node(pr, node, PT_AND);
-  case PT_AND:         return pr_next_biop_node(pr, node, PT_TEST);
   case PT_TEST:        return pr_next_biop_node(pr, node, PT_ADD_SUB);
   case PT_ADD_SUB:     return pr_next_biop_node(pr, node, PT_MUL_QUO_MOD);
   case PT_MUL_QUO_MOD: return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
   case PT_NOT_NOP_NEG: return pr_next_biop_node(pr, node, PT_POW0);
   case PT_POW0:        return pr_next_biop_fact_node(pr, node, PT_FAC);
   case PT_POW1:        return pr_next_unop_node(pr, node, PT_NOT_NOP_NEG);
-  case PT_FAC:         return pr_next_biop_node(pr, node, PT_CAL);
-  case PT_CAL:         return pr_next_prim_node(pr, node, PT_PRIM);
+  case PT_FAC:         return pr_next_biop_node(pr, node, PT_CAL_APX);
+  case PT_CAL_APX:     return pr_next_prim_node(pr, node, PT_PRIM);
   case PT_PRIM:        return pr_skip_rp0(pr, node, PT_SKIP_RP0);
   }
 
@@ -688,6 +695,8 @@ typedef enum {
   IR_ERR_NOT_DEFINED_SYMBOL,
   IR_ERR_NOT_IMPLEMENTED,
   IR_ERR_ALLOC_FAILED,
+  IR_ERR_STACK_OVERFLOW,
+  IR_ERR_STACK_UNDERFLOW,
   IR_ERR_AST_MEMORY_NOT_ENOUGH,
   IR_ERR_SYM_MEMORY_NOT_ENOUGH,
 } IR_ERR;
@@ -702,6 +711,8 @@ const char *ir_err_stringify(IR_ERR ir_err) {
     STRINGIFY_CASE(IR_ERR_NOT_DEFINED_SYMBOL)
     STRINGIFY_CASE(IR_ERR_NOT_IMPLEMENTED)
     STRINGIFY_CASE(IR_ERR_ALLOC_FAILED)
+    STRINGIFY_CASE(IR_ERR_STACK_OVERFLOW)
+    STRINGIFY_CASE(IR_ERR_STACK_UNDERFLOW)
     STRINGIFY_CASE(IR_ERR_AST_MEMORY_NOT_ENOUGH)
     STRINGIFY_CASE(IR_ERR_SYM_MEMORY_NOT_ENOUGH)
   }
@@ -712,76 +723,64 @@ const char *ir_err_stringify(IR_ERR ir_err) {
 //=:interpreter:interpreter
 
 typedef struct {
+  Node_Index cap;
+  Node_Index len;
+  Node data[];
+} Stack;
+
+IR_ERR st_add(Stack *st, Node nd) {
+  if (st->len >= st->cap)
+    return IR_ERR_STACK_OVERFLOW;
+
+  st->data[st->len] = nd;
+  ++st->len;
+
+  return IR_ERR_NOERROR;
+}
+
+IR_ERR st_pop(Stack *st, Node *nd) {
+  if (st->len == 0)
+    return IR_ERR_STACK_UNDERFLOW;
+
+  --st->len;
+  *nd = st->data[st->len];
+
+  return IR_ERR_NOERROR;
+}
+
+typedef struct {
   Parser *pr;
-  Map_Entry *global;
-  size_t global_cap;
-  Node_Index nodes_len;
-  Node_Index nodes_cap;
-  Node nodes[];
+  Stack *st;
+
+  Map_Entry *gscope;
+  size_t gscope_len;
+  size_t gscope_cap;
 } Interpreter;
 
-IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec);
-
-IR_ERR ir_nd_reserve(Interpreter *ir) {
-  if (ir->nodes_len + 1 >= ir->nodes_cap)
-    return IR_ERR_AST_MEMORY_NOT_ENOUGH;
-
-  ++ir->nodes_len;
-  return IR_ERR_NOERROR;
-}
-
-//=:interpreter:unop
-
-IR_ERR ir_unop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t nhs) {
-  ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
-
-  switch (op) {
-  case NT_UNOP_NOP: break;
-  case NT_UNOP_NOT: ir->nodes[ir->nodes_len].type = subfac_cmx(&ir->nodes[ir->nodes_len].as.pm, nhs); break;
-  case NT_UNOP_NEG: ir->nodes[ir->nodes_len].as.pm.c = -nhs; break;
-  case NT_UNOP_ABS:
-    ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
-    ir->nodes[ir->nodes_len].as.pm.c = fabs(nhs);
-    break;
-  default:
-    return IR_ERR_ILL_NT;
-  }
+IR_ERR ir_assert_type(Node_Type expected, Node_Type actual) {
+  if (expected != actual)
+    return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_unop_exec_bool(Interpreter *ir, Node_Type op, bol_t nhs) {
-  ir->nodes[ir->nodes_len].type = NT_PRIM_BOL;
+IR_ERR ir_st_pop_value(Interpreter *ir, Node *nd) {
+  TRY(IR_ERR, st_pop(ir->st, nd));
 
-  switch (op) {
-  case NT_UNOP_NOT: ir->nodes[ir->nodes_len].as.pm.b = !nhs; break;
-  default:
-    return IR_ERR_ILL_NT;
-  }
+  if (nd->type == NT_PRIM_SYM && !MAP_GET(ir->gscope, ir->gscope_cap, nd->as.pm.s, nd))
+    return IR_ERR_NOT_DEFINED_SYMBOL;
 
   return IR_ERR_NOERROR;
 }
 
-IR_ERR ir_unop_exec(Interpreter *ir, Node_Index src) {
-  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.up.nhs, true));
-  Node_Type node_a_type = ir->nodes[ir->nodes_len].type;
-  Primitive node_a_value = ir->nodes[ir->nodes_len].as.pm;
-
-  switch (node_a_type) {
-  case NT_PRIM_BOL: return ir_unop_exec_bool(ir, ir->pr->nodes[src].type, node_a_value.b);
-  case NT_PRIM_CMX: return ir_unop_exec_ncmx(ir, ir->pr->nodes[src].type, node_a_value.c);
-  default:
-    return IR_ERR_NUM_ARG_EXPECTED;
-  }
-}
-
-//=:interpreter:biop
-
-IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs,
-                              cmx_t rhs) {
-  ir->nodes[ir->nodes_len].type = NT_PRIM_BOL;
-
+IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrhs) {
   double ra, rb;
+
+  cmx_t lhs = nlhs.as.pm.c;
+  cmx_t rhs = nrhs.as.pm.c;
+
+  float lhs_re = nlhs.rel_err;
+  float rhs_re = nrhs.rel_err;
 
   if (cimag(lhs) == 0 && cimag(rhs) == 0) {
     ra = creal(lhs);
@@ -793,67 +792,78 @@ IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs,
     return IR_ERR_NOT_DEFINED_FOR_TYPE;
   }
 
+  double rt;
+
   switch (op) {
-  case NT_BIOP_GRE: ir->nodes[ir->nodes_len].as.pm.b = ra > rb; break;
-  case NT_BIOP_LES: ir->nodes[ir->nodes_len].as.pm.b = ra < rb; break;
+  case NT_BIOP_GRE: rt = ra > rb; break;
+  case NT_BIOP_LES: rt = ra < rb; break;
+  case NT_BIOP_EQU: rt = contains_interval(ra, lhs_re, rb, rhs_re); break;
+  case NT_BIOP_NEQ: rt = 1 - contains_interval(ra, lhs_re, rb, rhs_re); break;
   default:
     return IR_ERR_ILL_NT;
   }
 
-  return IR_ERR_NOERROR;
+  return st_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = 0});
 }
 
-IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, cmx_t lhs, cmx_t rhs) {
-  ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
+IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrhs) {
+  cmx_t rt;
+  float rt_re = 0;
+
+  cmx_t lhs = nlhs.as.pm.c;
+  cmx_t rhs = nrhs.as.pm.c;
+
+  float lhs_re = nlhs.rel_err;
+  float rhs_re = nrhs.rel_err;
 
   switch (op) {
-  case NT_BIOP_ADD: ir->nodes[ir->nodes_len].as.pm.c = lhs + rhs; break;
-  case NT_BIOP_SUB: ir->nodes[ir->nodes_len].as.pm.c = lhs - rhs; break;
-  case NT_BIOP_MUL: ir->nodes[ir->nodes_len].as.pm.c = lhs * rhs; break;
-  case NT_BIOP_POW: ir->nodes[ir->nodes_len].as.pm.c = pow(lhs, rhs); break;
-  case NT_BIOP_FAC: ir->nodes[ir->nodes_len].type = fac_cmx(&ir->nodes[ir->nodes_len].as.pm, lhs, rhs); break;
+  case NT_BIOP_ADD:
+    rt = lhs + rhs;
+    rt_re = (fabs(lhs_re * lhs) + fabs(rhs_re * rhs)) / fabs(rt);
+    break;
+  case NT_BIOP_SUB:
+    rt = lhs - rhs;
+    rt_re = (fabs(lhs_re * lhs) + fabs(rhs_re * rhs)) / fabs(rt);
+    break;
+  case NT_BIOP_APX:
+    rt = lhs;
+    rt_re = fabs(rhs);
+    break;
+  case NT_BIOP_MUL:
+    rt = lhs * rhs;
+    rt_re = lhs_re + rhs_re;
+    break;
+  case NT_BIOP_POW:
+    rt = pow(lhs, rhs);
+    rt_re = fabs(rhs * lhs_re + log(lhs) * rhs_re);
+    break;
+  case NT_BIOP_FAC:
+    rt = fac_cmx(lhs, rhs);
+    rt_re = fabs(lhs_re * lhs * log(lhs)) + rhs_re;
+    break;
   case NT_BIOP_QUO:
     if (rhs == 0)
       return IR_ERR_DIV_BY_ZERO;
 
-    ir->nodes[ir->nodes_len].as.pm.c = lhs / rhs;
+    rt = lhs / rhs;
+    rt_re = lhs_re + rhs_re;
     break;
   case NT_BIOP_MOD:
     if (cimag(lhs) != 0 || cimag(rhs) != 0)
       return IR_ERR_NOT_DEFINED_FOR_TYPE;
 
-    ir->nodes[ir->nodes_len].as.pm.c = fmod(creal(lhs), creal(rhs));
+    rt = fmod(creal(lhs), creal(rhs));
+    rt_re = lhs_re + rhs_re;
     break;
   default:
-    return ir_biop_exec_test_ncmx(ir, op, lhs, rhs);
+    return ir_biop_exec_test_ncmx(ir, op, nlhs, nrhs);
   }
 
-  return IR_ERR_NOERROR;
-}
-
-IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
-  ir->nodes[ir->nodes_len].type = NT_PRIM_BOL;
-
-  switch (op) {
-  case NT_BIOP_ORR: ir->nodes[ir->nodes_len].as.pm.b = lhs || rhs; break;
-  case NT_BIOP_AND: ir->nodes[ir->nodes_len].as.pm.b = lhs && rhs; break;
-  case NT_BIOP_EQU: ir->nodes[ir->nodes_len].as.pm.b = lhs == rhs; break;
-  case NT_BIOP_NEQ: ir->nodes[ir->nodes_len].as.pm.b = lhs != rhs; break;
-  case NT_BIOP_GRE:
-  case NT_BIOP_LES:
-  case NT_BIOP_GEQ:
-  case NT_BIOP_LEQ: return IR_ERR_NOT_DEFINED_FOR_TYPE;
-  default:
-    return IR_ERR_ILL_NT;
-  }
-
-  return IR_ERR_NOERROR;
+  return st_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = rt_re});
 }
 
 #define BUILTIN_CONST_PI (2282)
 #define BUILTIN_CONST_E (31)
-#define BUILTIN_CONST_TRUE (8321838)
-#define BUILTIN_CONST_FALSE (532047584)
 #define BUILTIN_SQRT (12241645)
 #define BUILTIN_CEIL (10106845)
 #define BUILTIN_ROUND (513997420)
@@ -874,139 +884,147 @@ IR_ERR ir_biop_exec_bool(Interpreter *ir, Node_Type op, bol_t lhs, bol_t rhs) {
 #define BUILTIN_ATANH (581024667)
 
 IR_ERR ir_call_exec_builtin_cmx(Interpreter *ir, sym_t fn, cmx_t arg) {
-  ir->nodes[ir->nodes_len].type = NT_PRIM_CMX;
+  cmx_t rt;
 
   switch (fn) {
-  case BUILTIN_SQRT:  ir->nodes[ir->nodes_len].as.pm.c = sqrt(arg); break;
-  case BUILTIN_CEIL:  ir->nodes[ir->nodes_len].as.pm.c = ceil(creal(arg)) + ceil(cimag(arg)) * I; break;
-  case BUILTIN_ROUND: ir->nodes[ir->nodes_len].as.pm.c = round(creal(arg)) + round(cimag(arg)) * I; break;
-  case BUILTIN_FLOOR: ir->nodes[ir->nodes_len].as.pm.c = floor(creal(arg)) + floor(cimag(arg)) * I; break;
-  case BUILTIN_LN:    ir->nodes[ir->nodes_len].as.pm.c = log(arg); break;
-  case BUILTIN_EXP:   ir->nodes[ir->nodes_len].as.pm.c = exp(arg); break;
-  case BUILTIN_COS:   ir->nodes[ir->nodes_len].as.pm.c = cos(arg); break;
-  case BUILTIN_SIN:   ir->nodes[ir->nodes_len].as.pm.c = sin(arg); break;
-  case BUILTIN_TAN:   ir->nodes[ir->nodes_len].as.pm.c = tan(arg); break;
-  case BUILTIN_COSH:  ir->nodes[ir->nodes_len].as.pm.c = cosh(arg); break;
-  case BUILTIN_SINH:  ir->nodes[ir->nodes_len].as.pm.c = sinh(arg); break;
-  case BUILTIN_TANH:  ir->nodes[ir->nodes_len].as.pm.c = tanh(arg); break;
-  case BUILTIN_ACOS:  ir->nodes[ir->nodes_len].as.pm.c = acos(arg); break;
-  case BUILTIN_ASIN:  ir->nodes[ir->nodes_len].as.pm.c = asin(arg); break;
-  case BUILTIN_ATAN:  ir->nodes[ir->nodes_len].as.pm.c = atan(arg); break;
-  case BUILTIN_ACOSH: ir->nodes[ir->nodes_len].as.pm.c = acosh(arg); break;
-  case BUILTIN_ASINH: ir->nodes[ir->nodes_len].as.pm.c = asinh(arg); break;
-  case BUILTIN_ATANH: ir->nodes[ir->nodes_len].as.pm.c = atanh(arg); break;
+  case BUILTIN_SQRT:  rt = sqrt(arg); break;
+  case BUILTIN_CEIL:  rt = ceil(creal(arg)) + ceil(cimag(arg)) * I; break;
+  case BUILTIN_ROUND: rt = round(creal(arg)) + round(cimag(arg)) * I; break;
+  case BUILTIN_FLOOR: rt = floor(creal(arg)) + floor(cimag(arg)) * I; break;
+  case BUILTIN_LN:    rt = log(arg); break;
+  case BUILTIN_EXP:   rt = exp(arg); break;
+  case BUILTIN_COS:   rt = cos(arg); break;
+  case BUILTIN_SIN:   rt = sin(arg); break;
+  case BUILTIN_TAN:   rt = tan(arg); break;
+  case BUILTIN_COSH:  rt = cosh(arg); break;
+  case BUILTIN_SINH:  rt = sinh(arg); break;
+  case BUILTIN_TANH:  rt = tanh(arg); break;
+  case BUILTIN_ACOS:  rt = acos(arg); break;
+  case BUILTIN_ASIN:  rt = asin(arg); break;
+  case BUILTIN_ATAN:  rt = atan(arg); break;
+  case BUILTIN_ACOSH: rt = acosh(arg); break;
+  case BUILTIN_ASINH: rt = asinh(arg); break;
+  case BUILTIN_ATANH: rt = atanh(arg); break;
   default:
     return IR_ERR_NOT_DEFINED_SYMBOL;
   }
-  return IR_ERR_NOERROR;
+
+  return st_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = 0});
 }
 
-IR_ERR ir_list_exec(Interpreter *ir, Node_Index src) {
-  Node_Index root = ir->nodes_len;
-  ir->nodes[root].type = NT_BIOP_XPC;
+IR_ERR ir_exec(Interpreter *ir) {
+  Node current, lhs, rhs;
+  Node_Index tail_mark, head_mark;
 
-  TRY(IR_ERR, ir_nd_reserve(ir));
-  ir->nodes[root].as.bp.lhs = ir->nodes_len;
-  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs, true));
+  Node_Index pr_nodes_ptr = 0;
 
-  TRY(IR_ERR, ir_nd_reserve(ir));
-  ir->nodes[root].as.bp.rhs = ir->nodes_len;
-  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
+  while (pr_nodes_ptr < ir->pr->nodes_len) {
+    current = ir->pr->nodes[pr_nodes_ptr];
 
-  return IR_ERR_NOERROR;
-}
+    switch (current.type) {
+    case NT_PRIM_SYM:
+    case NT_PRIM_CMX:
+      TRY(IR_ERR, st_add(ir->st, current));
+      break;
+    case NT_UNOP_NOT:
+    case NT_UNOP_NEG:
+    case NT_UNOP_ABS:
+    case NT_UNOP_NOP:
+      tail_mark = pr_nodes_ptr;
+      if (pr_nodes_ptr + 1 == ir->pr->nodes_len)
+        return IR_ERR_NUM_ARG_EXPECTED;
+      ++pr_nodes_ptr;
 
-IR_ERR ir_biop_exec(Interpreter *ir, Node_Index src) {
-  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.lhs,
-                      ir->pr->nodes[src].type != NT_BIOP_LET &&
-                          ir->pr->nodes[src].type != NT_CALL));
-  Node lhs = {.type = ir->nodes[ir->nodes_len].type,
-              .as.pm = ir->nodes[ir->nodes_len].as.pm};
+      while (pr_nodes_ptr + 1 < ir->pr->nodes_len && is_unop(ir->pr->nodes[pr_nodes_ptr].type))
+        ++pr_nodes_ptr;
 
-  TRY(IR_ERR, ir_exec(ir, ir->pr->nodes[src].as.bp.rhs, true));
-  Node rhs = {.type = ir->nodes[ir->nodes_len].type,
-              .as.pm = ir->nodes[ir->nodes_len].as.pm};
+      head_mark = pr_nodes_ptr;
 
-  if (ir->pr->nodes[src].type == NT_BIOP_LET && lhs.type == NT_PRIM_SYM) {
-    if (!MAP_SET(ir->global, ir->global_cap, lhs.as.pm.s, &rhs))
-      return IR_ERR_SYM_MEMORY_NOT_ENOUGH;
-    return IR_ERR_NOERROR;
-  }
+      TRY(IR_ERR, ir_assert_type(NT_PRIM_CMX, rhs.type));
 
-  if (lhs.type == NT_PRIM_CMX && rhs.type == NT_PRIM_CMX)
-    return ir_biop_exec_ncmx(ir, ir->pr->nodes[src].type, lhs.as.pm.c,
-                             rhs.as.pm.c);
+      lhs = ir->pr->nodes[pr_nodes_ptr];
 
-  if (lhs.type == NT_PRIM_BOL || rhs.type == NT_PRIM_BOL) {
-    if (lhs.type != rhs.type)
-      return IR_ERR_NOT_DEFINED_FOR_TYPE;
-
-    return ir_biop_exec_bool(ir, ir->pr->nodes[src].type, lhs.as.pm.b,
-                             rhs.as.pm.b);
-  }
-
-  if (ir->pr->nodes[src].type == NT_CALL && lhs.type == NT_PRIM_SYM &&
-      rhs.type == NT_PRIM_CMX)
-    return ir_call_exec_builtin_cmx(ir, lhs.as.pm.s, rhs.as.pm.c);
-
-  return IR_ERR_NOT_IMPLEMENTED;
-}
-
-//=:interpreter:interpreter
-
-IR_ERR ir_exec(Interpreter *ir, Node_Index src, bool sym_exec) {
-  switch (ir->pr->nodes[src].type) {
-  case NT_UNOP_NOT:
-  case NT_UNOP_NOP:
-  case NT_UNOP_NEG:
-  case NT_UNOP_ABS:
-    return ir_unop_exec(ir, src);
-  case NT_BIOP_XPC:
-    return ir_list_exec(ir, src);
-  case NT_BIOP_LET:
-  case NT_BIOP_AND:
-  case NT_BIOP_ORR:
-  case NT_BIOP_GRE:
-  case NT_BIOP_LES:
-  case NT_BIOP_GEQ:
-  case NT_BIOP_LEQ:
-  case NT_BIOP_EQU:
-  case NT_BIOP_NEQ:
-  case NT_BIOP_ADD:
-  case NT_BIOP_SUB:
-  case NT_BIOP_MUL:
-  case NT_BIOP_QUO:
-  case NT_BIOP_MOD:
-  case NT_BIOP_POW:
-  case NT_BIOP_FAC:
-  case NT_CALL:
-    return ir_biop_exec(ir, src);
-  case NT_PRIM_SYM:
-    if (sym_exec) {
-      if (!MAP_GET(ir->global, ir->global_cap, ir->pr->nodes[src].as.pm.s,
-                   &ir->nodes[ir->nodes_len])) {
+      if (lhs.type == NT_PRIM_SYM && !MAP_GET(ir->gscope, ir->gscope_cap, lhs.as.pm.s, &lhs))
         return IR_ERR_NOT_DEFINED_SYMBOL;
+
+      while (pr_nodes_ptr > tail_mark && pr_nodes_ptr <= head_mark) {
+				--pr_nodes_ptr;
+				
+        switch (ir->pr->nodes[pr_nodes_ptr].type) {
+        case NT_UNOP_NOP: break;
+        case NT_UNOP_NOT: lhs.as.pm.c = subfac_cmx(lhs.as.pm.c); break;
+        case NT_UNOP_NEG: lhs.as.pm.c = -lhs.as.pm.c; break;
+        case NT_UNOP_ABS: lhs.as.pm.c = fabs(lhs.as.pm.c); break;
+        default:
+          return IR_ERR_ILL_NT;
+        }
       }
-      return IR_ERR_NOERROR;
+
+      pr_nodes_ptr = head_mark;
+      st_add(ir->st, lhs);
+      break;
+    case NT_CALL:
+      TRY(IR_ERR, ir_st_pop_value(ir, &rhs));
+      TRY(IR_ERR, st_pop(ir->st, &lhs));
+
+      TRY(IR_ERR, ir_assert_type(NT_PRIM_SYM, lhs.type));
+      TRY(IR_ERR, ir_assert_type(NT_PRIM_CMX, rhs.type));
+
+      TRY(IR_ERR, ir_call_exec_builtin_cmx(ir, lhs.as.pm.s, rhs.as.pm.c));
+      break;
+    case NT_BIOP_LET:
+      TRY(IR_ERR, ir_st_pop_value(ir, &rhs));
+      TRY(IR_ERR, st_pop(ir->st, &lhs));
+
+      TRY(IR_ERR, ir_assert_type(NT_PRIM_SYM, lhs.type));
+
+      if (!MAP_SET(ir->gscope, ir->gscope_cap, lhs.as.pm.s, &rhs))
+        return IR_ERR_SYM_MEMORY_NOT_ENOUGH;
+
+      break;
+    case NT_BIOP_GRE:
+    case NT_BIOP_LES:
+    case NT_BIOP_GEQ:
+    case NT_BIOP_LEQ:
+    case NT_BIOP_EQU:
+    case NT_BIOP_NEQ:
+    case NT_BIOP_ADD:
+    case NT_BIOP_SUB:
+    case NT_BIOP_APX:
+    case NT_BIOP_MUL:
+    case NT_BIOP_QUO:
+    case NT_BIOP_MOD:
+    case NT_BIOP_POW:
+    case NT_BIOP_FAC:
+      TRY(IR_ERR, ir_st_pop_value(ir, &rhs));
+      TRY(IR_ERR, ir_st_pop_value(ir, &lhs));
+
+      if (lhs.type == NT_PRIM_CMX && rhs.type == NT_PRIM_CMX) {
+        TRY(IR_ERR, ir_biop_exec_ncmx(ir, current.type, lhs, rhs));
+      } else {
+        return IR_ERR_NOT_DEFINED_FOR_TYPE;
+      }
+
+      break;
+    default:
+      return IR_ERR_NOT_IMPLEMENTED;
     }
-    // TODO: replace with [[fallthrough]]; (supported only from c23)
-    ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
-    return IR_ERR_NOERROR;
-  case NT_PRIM_CMX:
-  case NT_PRIM_BOL:
-    ir->nodes[ir->nodes_len] = ir->pr->nodes[src];
-    return IR_ERR_NOERROR;
-	case NT_BIOP_SPZ:
-		return IR_ERR_NOT_IMPLEMENTED;
+
+    ++pr_nodes_ptr;
   }
 
-  return IR_ERR_ILL_NT;
+  if (ir->st->len) {
+    TRY(IR_ERR, ir_st_pop_value(ir, &current));
+    TRY(IR_ERR, st_add(ir->st, current));
+  }
+
+  return IR_ERR_NOERROR;
 }
 
 //=:user:repl
 
 _Noreturn void repl(Interpreter *ir) {
-  Node_Index source = 0;
+  Node_Index source;
 
 #ifdef _READLINE_H_
   using_history();
@@ -1018,10 +1036,12 @@ _Noreturn void repl(Interpreter *ir) {
       free(ir->pr->lx.rd.page.data);
 #endif
 
-    ir->nodes_len = 0;
+    source = 0;
     rd_reset_counters(&ir->pr->lx.rd);
+    ir->st->len = 0;
     ir->pr->p0c = 0;
     ir->pr->abs = false;
+    ir->pr->nodes_len = 1;
 
 #ifdef _READLINE_H_
     if ((ir->pr->lx.rd.page.data = readline(REPL_PROMPT)) == NULL)
@@ -1067,7 +1087,14 @@ _Noreturn void repl(Interpreter *ir) {
                   SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-    IR_ERR ierr = ir_exec(ir, source, true);
+    for (Node_Index i = 0; i < ir->pr->nodes_len; ++i) {
+      DBG_PRINT("ir->pr->nodes[%d] = %s, ", i, nt_stringify(ir->pr->nodes[i].type));
+      if (ir->pr->nodes[i].type == NT_PRIM_CMX)
+        nd_tree_print_cmx(ir->pr->nodes[i].as.pm.c, ir->pr->nodes[i].rel_err);
+      printf("\n");
+    }
+
+    IR_ERR ierr = ir_exec(ir);
     if (ierr != IR_ERR_NOERROR) {
       ERROR(CLR_INTERNAL "%s" CLR_RESET " (%d)\n", ir_err_stringify(ierr),
             ierr);
@@ -1075,10 +1102,13 @@ _Noreturn void repl(Interpreter *ir) {
     }
 
     printf(REPL_RESULT_PREFIX);
-    if (ir->nodes_len != 0)
+    if (ir->st->len != 0)
       printf("\n");
-    nd_tree_print(ir->nodes, 0, RESULT_INDENTATION,
-                  RESULT_INDENTATION + RESULT_MAX_DEPTH);
+
+    if (ir->st->len != 0) {
+      nd_tree_print(ir->st->data, 0, SOURCE_INDENTATION,
+                    SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
+    }
 
     printf(REPL_RESULT_SUFFIX);
   }
@@ -1087,26 +1117,40 @@ _Noreturn void repl(Interpreter *ir) {
 //=:user:main
 
 int main(int argc, char *argv[]) {
-  Interpreter *ir = malloc(sizeof(Interpreter) + NODE_BUF_SIZE * sizeof(Node));
-  assert(ir != NULL && "allocation failed");
+  Interpreter ir;
 
-  ir->nodes_cap = NODE_BUF_SIZE;
-  ir->nodes_len = 0;
+  ir.st = malloc(sizeof(Stack) + NODE_BUF_SIZE * sizeof(Node));
+  assert(ir.st != NULL && "allocation failed");
 
-  ir->pr = malloc(sizeof(Parser) + NODE_BUF_SIZE * sizeof(Node));
-  assert(ir->pr != NULL && "allocation failed");
+  ir.st->cap = NODE_BUF_SIZE;
+  ir.st->len = 0;
 
-  ir->global_cap = GLOBAL_SCOPE_CAPACITY;
-  ir->global =
-      (Map_Entry *)calloc(ir->global_cap, sizeof(Map_Entry) + sizeof(Node));
-  assert(ir->pr != NULL && "allocation failed");
+  ir.pr = malloc(sizeof(Parser) + NODE_BUF_SIZE * sizeof(Node));
+  assert(ir.pr != NULL && "allocation failed");
 
-  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_PI, (&(Node){.type = NT_PRIM_CMX, .as.pm.c = M_PI}));
-  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_E, (&(Node){.type = NT_PRIM_CMX, .as.pm.c = M_E}));
-  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_TRUE, (&(Node){.type = NT_PRIM_BOL, .as.pm.b = true}));
-  MAP_SET(ir->global, ir->global_cap, BUILTIN_CONST_FALSE, (&(Node){.type = NT_PRIM_BOL, .as.pm.b = false}));
+  ir.gscope_cap = GLOBAL_SCOPE_CAPACITY;
+  ir.gscope =
+      (Map_Entry *)calloc(ir.gscope_cap, sizeof(Map_Entry) + sizeof(Node));
+  assert(ir.pr != NULL && "allocation failed");
 
-  *ir->pr = ((Parser){
+  MAP_SET(ir.gscope,
+          ir.gscope_cap,
+          BUILTIN_CONST_PI,
+          (&(Node){
+              .type = NT_PRIM_CMX,
+              .as.pm.c = M_PI,
+              .rel_err = (nextafter((double)M_PI, INFINITY) - M_PI) / M_PI,
+          }));
+  MAP_SET(ir.gscope,
+          ir.gscope_cap,
+          BUILTIN_CONST_E,
+          (&(Node){
+              .type = NT_PRIM_CMX,
+              .as.pm.c = M_E,
+              .rel_err = (nextafter((double)M_E, INFINITY) - M_E) / M_E,
+          }));
+
+  *ir.pr = ((Parser){
       .lx.rd =
           {
               .src = NULL,
@@ -1124,59 +1168,80 @@ int main(int argc, char *argv[]) {
   });
 
   if (isatty(STDIN_FILENO) && argc == 1)
-    repl(ir);
+    repl(&ir);
 
-  if (argc > 2)
+  if (argc > 3)
     FATAL("too many arguments\n");
 
-  if (argc == 2) {
-    ir->pr->lx.rd.page.len = ir->pr->lx.rd.page.cap = strlen(argv[1]);
-    ir->pr->lx.rd.page.data = argv[1];
-  } else {
-    ir->pr->lx.rd.src = stdin;
+  if (argc == 3 && strcmp(argv[1], "-f") == 0) {
+    ir.pr->lx.rd.src = fopen(argv[2], "r");
+    if (ir.pr->lx.rd.src == NULL)
+      PFATAL("failed to open file");
 
-    ir->pr->lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
-    ir->pr->lx.rd.page.data =
-        (char *)malloc(ir->pr->lx.rd.page.cap * sizeof(char));
-    assert(ir->pr->lx.rd.page.data != NULL && "allocation failed");
+    ir.pr->lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
+    ir.pr->lx.rd.page.data =
+        (char *)malloc(ir.pr->lx.rd.page.cap * sizeof(char));
+    assert(ir.pr->lx.rd.page.data != NULL && "allocation failed");
+  } else if (argc == 2) {
+    ir.pr->lx.rd.page.len = ir.pr->lx.rd.page.cap = strlen(argv[1]);
+    ir.pr->lx.rd.page.data = argv[1];
+  } else {
+    ir.pr->lx.rd.src = stdin;
+
+    ir.pr->lx.rd.page.cap = INTERNAL_READING_BUF_SIZE;
+    ir.pr->lx.rd.page.data =
+        (char *)malloc(ir.pr->lx.rd.page.cap * sizeof(char));
+    assert(ir.pr->lx.rd.page.data != NULL && "allocation failed");
   }
 
-  rd_reset_counters(&ir->pr->lx.rd);
+  rd_reset_counters(&ir.pr->lx.rd);
 
   Node_Index source = 0;
 
-  PR_ERR perr = pr_next_node(ir->pr, &source);
+  PR_ERR perr = pr_next_node(ir.pr, &source);
   if (perr != PR_ERR_NOERROR)
-    FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", ir->pr->lx.rd.row,
-          ir->pr->lx.rd.col, pr_err_stringify(perr), perr,
-          tt_stringify(ir->pr->lx.tt), ir->pr->lx.tt);
+    FATAL("%zu:%zu: %s (%d) [token: %s (%d)]\n", ir.pr->lx.rd.row,
+          ir.pr->lx.rd.col, pr_err_stringify(perr), perr,
+          tt_stringify(ir.pr->lx.tt), ir.pr->lx.tt);
 
-  if (ir->pr->lx.tt != TT_EOS) {
+  if (ir.pr->lx.tt != TT_EOS) {
     ERROR("%zu:%zu: " CLR_INTERNAL "PR_ERR_UNEXPECTED_EXPRESSION" CLR_RESET
           "\n",
-          ir->pr->lx.rd.row, ir->pr->lx.rd.col);
+          ir.pr->lx.rd.row, ir.pr->lx.rd.col);
     ERROR(CLR_INF_MSG "consider adding ';' between expressions\n" CLR_RESET);
     exit(1);
   }
 
+  /* for (Node_Index i = 0; i < ir.pr->nodes_len; ++i) { */
+  /*   DBG_PRINT("ir.pr->nodes[%d] = %s, ", i, nt_stringify(ir.pr->nodes[i].type)); */
+  /*   if (ir.pr->nodes[i].type == NT_PRIM_CMX) */
+  /*     nd_tree_print_cmx(ir.pr->nodes[i].as.pm.c, ir.pr->nodes[i].rel_err); */
+  /*   printf("\n"); */
+  /* } */
+
 #ifndef NDEBUG
-  nd_tree_print(ir->pr->nodes, source, SOURCE_INDENTATION,
+  nd_tree_print(ir.pr->nodes, source, SOURCE_INDENTATION,
                 SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
 #endif
 
-  IR_ERR ierr = ir_exec(ir, source, true);
+  IR_ERR ierr = ir_exec(&ir);
   if (ierr != IR_ERR_NOERROR)
     FATAL("%s (%d)\n", ir_err_stringify(ierr), ierr);
 
   printf(REPL_RESULT_PREFIX);
-  nd_tree_print(ir->nodes, 0, RESULT_INDENTATION,
-                RESULT_INDENTATION + RESULT_MAX_DEPTH);
+  if (ir.st->len != 0) {
+    nd_tree_print(ir.st->data, 0, SOURCE_INDENTATION,
+                  SOURCE_INDENTATION + SOURCE_MAX_DEPTH);
+  }
 
   printf(REPL_RESULT_SUFFIX);
 
-  if (ir->pr->lx.rd.src != NULL)
-    free(ir->pr->lx.rd.page.data);
-  free(ir->pr);
+  if (ir.pr->lx.rd.src != NULL)
+    free(ir.pr->lx.rd.page.data);
+  free(ir.pr);
+
+  if (argc == 3)
+    fclose(ir.pr->lx.rd.src);
 
   return EXIT_SUCCESS;
 }

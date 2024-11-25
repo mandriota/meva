@@ -214,13 +214,8 @@ typedef enum {
 
   TT_SYM,
   TT_CMX,
-  TT_FAL,
-  TT_TRU,
 
   TT_LET,
-
-  TT_AND,
-  TT_ORR,
 
   TT_GRE,
   TT_LES,
@@ -231,6 +226,7 @@ typedef enum {
 
   TT_ADD,
   TT_SUB,
+  TT_APX,
 
   TT_MUL,
   TT_QUO,
@@ -260,11 +256,7 @@ static inline const char *tt_stringify(Token_Type tt) {
     STRINGIFY_CASE(TT_EOS)
     STRINGIFY_CASE(TT_SYM)
     STRINGIFY_CASE(TT_CMX)
-    STRINGIFY_CASE(TT_FAL)
-    STRINGIFY_CASE(TT_TRU)
     STRINGIFY_CASE(TT_LET)
-    STRINGIFY_CASE(TT_AND)
-    STRINGIFY_CASE(TT_ORR)
     STRINGIFY_CASE(TT_GRE)
     STRINGIFY_CASE(TT_LES)
     STRINGIFY_CASE(TT_GEQ)
@@ -273,6 +265,7 @@ static inline const char *tt_stringify(Token_Type tt) {
     STRINGIFY_CASE(TT_NEQ)
     STRINGIFY_CASE(TT_ADD)
     STRINGIFY_CASE(TT_SUB)
+    STRINGIFY_CASE(TT_APX)
     STRINGIFY_CASE(TT_MUL)
     STRINGIFY_CASE(TT_QUO)
     STRINGIFY_CASE(TT_MOD)
@@ -296,12 +289,8 @@ static inline const char *tt_stringify(Token_Type tt) {
 typedef enum {
   NT_PRIM_SYM = TT_SYM,
   NT_PRIM_CMX = TT_CMX,
-  NT_PRIM_BOL,
 
   NT_BIOP_LET = TT_LET,
-
-  NT_BIOP_AND = TT_AND,
-  NT_BIOP_ORR = TT_ORR,
 
   NT_BIOP_GRE = TT_GRE,
   NT_BIOP_LES = TT_LES,
@@ -312,6 +301,7 @@ typedef enum {
 
   NT_BIOP_ADD = TT_ADD,
   NT_BIOP_SUB = TT_SUB,
+  NT_BIOP_APX = TT_APX,
 
   NT_BIOP_MUL = TT_MUL,
   NT_BIOP_QUO = TT_QUO,
@@ -339,10 +329,7 @@ static inline const char *nt_stringify(Node_Type nt) {
   switch (nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
     STRINGIFY_CASE(NT_PRIM_CMX)
-    STRINGIFY_CASE(NT_PRIM_BOL)
     STRINGIFY_CASE(NT_BIOP_LET)
-    STRINGIFY_CASE(NT_BIOP_AND)
-    STRINGIFY_CASE(NT_BIOP_ORR)
     STRINGIFY_CASE(NT_BIOP_GRE)
     STRINGIFY_CASE(NT_BIOP_LES)
     STRINGIFY_CASE(NT_BIOP_GEQ)
@@ -351,6 +338,7 @@ static inline const char *nt_stringify(Node_Type nt) {
     STRINGIFY_CASE(NT_BIOP_NEQ)
     STRINGIFY_CASE(NT_BIOP_ADD)
     STRINGIFY_CASE(NT_BIOP_SUB)
+    STRINGIFY_CASE(NT_BIOP_APX)
     STRINGIFY_CASE(NT_BIOP_MUL)
     STRINGIFY_CASE(NT_BIOP_QUO)
     STRINGIFY_CASE(NT_BIOP_MOD)
@@ -373,8 +361,6 @@ static inline const char *nt_stringify(Node_Type nt) {
 Node_Type tt_to_biop_nd(Token_Type tt) {
   switch (tt) {
   case TT_LET: return NT_BIOP_LET;
-  case TT_AND: return NT_BIOP_AND;
-  case TT_ORR: return NT_BIOP_ORR;
   case TT_GRE: return NT_BIOP_GRE;
   case TT_LES: return NT_BIOP_LES;
   case TT_GEQ: return NT_BIOP_GEQ;
@@ -385,6 +371,7 @@ Node_Type tt_to_biop_nd(Token_Type tt) {
   case TT_NOP: return NT_BIOP_ADD;
   case TT_SUB:
   case TT_NEG: return NT_BIOP_SUB;
+  case TT_APX: return NT_BIOP_APX;
   case TT_MUL: return NT_BIOP_MUL;
   case TT_QUO: return NT_BIOP_QUO;
   case TT_MOD: return NT_BIOP_MOD;
@@ -398,31 +385,51 @@ Node_Type tt_to_biop_nd(Token_Type tt) {
   }
 }
 
+bool is_unop(Node_Type nt) {
+  return nt == NT_UNOP_NOT ||
+         nt == NT_UNOP_NEG ||
+         nt == NT_UNOP_ABS ||
+         nt == NT_UNOP_NOP;
+}
+
 //=:runtime
 
 typedef union {
   cmx_t c;
   sym_t s;
-  bol_t b;
 } Primitive;
 
 //=:runtime:assertions
-#define ASSERT_NON_NEG_INT(x, fn, what, rt, action) \
-  if (x < 0 && fmod(-x, 1) <= MAX_DIFF_ABS) {       \
-    WARNING(fn " of negative integer " what "\n");  \
-    action;                                         \
-    return rt;                                      \
+#define ASSERT_NON_NEG_INT(x, fn, what, rt)        \
+  if (x < 0 && fmod(-x, 1) <= MAX_DIFF_ABS) {      \
+    WARNING(fn " of negative integer " what "\n"); \
+    return rt;                                     \
   }
 
 #define ASSERT_IMG_ZER(x, fn)                                                \
   if (cimag(x) != 0) {                                                       \
     WARNING(fn                                                               \
             " of a number with imaginary part != 0 is not implemented yet"); \
-    rt->c = NAN;                                                             \
-    return NT_PRIM_CMX;                                                      \
+    return NAN;                                                              \
   }
 
 //=:runtime:operators
+
+double contains_interval(double a, double a_re, double b, double b_re) {
+  double al = (1 - a_re) * a, ah = (1 + a_re) * a;
+  double bl = (1 - b_re) * b, bh = (1 + b_re) * b;
+
+  if ((al >= bl && ah <= bh) || (bl >= al && bh <= ah))
+    return 1;
+
+  if (ah < bl || bl > ah)
+    return 0;
+
+  if (ah > bh)
+    return (bh - al) / (ah - bl);
+
+  return (ah - bl) / (bh - al);
+}
 
 cmx_t fac_cmx_helper(cmx_t i, uint64_t step) {
   cmx_t rt = 0;
@@ -433,23 +440,22 @@ cmx_t fac_cmx_helper(cmx_t i, uint64_t step) {
   return rt / step;
 }
 
-Node_Type fac_cmx(Primitive *rt, cmx_t base, cmx_t step) {
+cmx_t fac_cmx(cmx_t base, cmx_t step) {
   ASSERT_IMG_ZER(base, "factorial");
 
   double rbase = creal(base);
   double rstep = creal(step);
   uint64_t ustep = (uint64_t)step;
 
-  ASSERT_NON_NEG_INT(rbase, "factorial", "is equal to infinity", NT_PRIM_CMX,
-                     rt->c = INFINITY);
+  ASSERT_NON_NEG_INT(rbase, "factorial", "is equal to infinity", INFINITY);
 
-  rt->c = pow(rstep, rbase / rstep) * tgamma(1 + rbase / rstep);
+  cmx_t rt = pow(rstep, rbase / rstep) * tgamma(1 + rbase / rstep);
 
   for (uint64_t i = 1; i < ustep; ++i)
-    rt->c *= pow(pow(rstep, (rstep - i) / rstep) / tgamma(i / rstep),
-                 fac_cmx_helper(rbase - i, ustep));
+    rt *= pow(pow(rstep, (rstep - i) / rstep) / tgamma(i / rstep),
+              fac_cmx_helper(rbase - i, ustep));
 
-  return NT_PRIM_CMX;
+  return rt;
 }
 
 enum {
@@ -465,20 +471,17 @@ cmx_t gamma_lower_quo_e(double s) {
   return cpow((cmx_t)-1, (cmx_t)s) * rt;
 }
 
-Node_Type subfac_cmx(Primitive *rt, cmx_t base) {
+cmx_t subfac_cmx(cmx_t base) {
   ASSERT_IMG_ZER(base, "subfactorial");
 
   double rbase = creal(base);
 
-  ASSERT_NON_NEG_INT(rbase, "subfactorial", "currently is not implemented",
-                     NT_PRIM_CMX, rt->c = NAN);
+  ASSERT_NON_NEG_INT(rbase, "subfactorial", "currently is not implemented", NAN);
 
-  if (rbase >= 0 && fmod(rbase, 1) <= MAX_DIFF_ABS) {
-    rt->c = creal(tgamma(rbase + 1) / M_E - gamma_lower_quo_e(rbase + 1));
-    return NT_PRIM_CMX;
-  }
-  rt->c = tgamma(rbase + 1) / M_E - gamma_lower_quo_e(base + 1);
-  return NT_PRIM_CMX;
+  if (rbase >= 0 && fmod(rbase, 1) <= MAX_DIFF_ABS)
+    return creal(tgamma(rbase + 1) / M_E - gamma_lower_quo_e(rbase + 1));
+
+  return tgamma(rbase + 1) / M_E - gamma_lower_quo_e(base + 1);
 }
 
 #endif
