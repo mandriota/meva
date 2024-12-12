@@ -376,6 +376,8 @@ void nd_tree_print_prb(cmx_t cmx) {
   } else if (creal(cmx) != 0) {
     printf(CLR_PRIM "%lf", creal(cmx));
   }
+
+	printf("\n" CLR_RESET);
 }
 
 void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
