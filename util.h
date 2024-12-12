@@ -287,34 +287,35 @@ static inline const char *tt_stringify(Token_Type tt) {
 //=:parser:nodes
 
 typedef enum {
-  NT_PRIM_SYM = TT_SYM,
-  NT_PRIM_CMX = TT_CMX,
+  NT_PRIM_SYM,
+  NT_PRIM_CMX,
+  NT_PRIM_PRB,
 
-  NT_BIOP_LET = TT_LET,
+  NT_BIOP_LET,
 
-  NT_BIOP_GRE = TT_GRE,
-  NT_BIOP_LES = TT_LES,
-  NT_BIOP_GEQ = TT_GEQ,
-  NT_BIOP_LEQ = TT_LEQ,
-  NT_BIOP_EQU = TT_EQU,
-  NT_BIOP_NEQ = TT_NEQ,
+  NT_BIOP_GRE,
+  NT_BIOP_LES,
+  NT_BIOP_GEQ,
+  NT_BIOP_LEQ,
+  NT_BIOP_EQU,
+  NT_BIOP_NEQ,
 
-  NT_BIOP_ADD = TT_ADD,
-  NT_BIOP_SUB = TT_SUB,
-  NT_BIOP_APX = TT_APX,
+  NT_BIOP_ADD,
+  NT_BIOP_SUB,
+  NT_BIOP_APX,
 
-  NT_BIOP_MUL = TT_MUL,
-  NT_BIOP_QUO = TT_QUO,
-  NT_BIOP_MOD = TT_MOD,
+  NT_BIOP_MUL,
+  NT_BIOP_QUO,
+  NT_BIOP_MOD,
 
-  NT_BIOP_POW = TT_POW,
+  NT_BIOP_POW,
 
-  NT_BIOP_XPC = TT_XPC,
-  NT_BIOP_SPZ = TT_SPZ,
+  NT_BIOP_XPC,
+  NT_BIOP_SPZ,
 
-  NT_BIOP_FAC = TT_FAC,
+  NT_BIOP_FAC,
 
-  NT_UNOP_ABS = TT_ABS,
+  NT_UNOP_ABS,
 
   NT_UNOP_NOT,
   NT_UNOP_NOP,
@@ -329,6 +330,7 @@ static inline const char *nt_stringify(Node_Type nt) {
   switch (nt) {
     STRINGIFY_CASE(NT_PRIM_SYM)
     STRINGIFY_CASE(NT_PRIM_CMX)
+    STRINGIFY_CASE(NT_PRIM_PRB)
     STRINGIFY_CASE(NT_BIOP_LET)
     STRINGIFY_CASE(NT_BIOP_GRE)
     STRINGIFY_CASE(NT_BIOP_LES)
@@ -419,10 +421,10 @@ double contains_interval(double a, double a_re, double b, double b_re) {
   double al = (1 - a_re) * a, ah = (1 + a_re) * a;
   double bl = (1 - b_re) * b, bh = (1 + b_re) * b;
 
-  if ((al >= bl && ah <= bh) || (bl >= al && bh <= ah))
+  if ((bl <= al && ah <= bh) || (al <= bl && bh <= ah))
     return 1;
 
-  if (ah < bl || bl > ah)
+  if (ah < bl || bl > ah || bh < al || al > bh)
     return 0;
 
   if (ah > bh)

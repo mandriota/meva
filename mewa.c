@@ -368,6 +368,16 @@ void nd_tree_print_cmx(cmx_t cmx, float rel_err) {
   }
 }
 
+void nd_tree_print_prb(cmx_t cmx) {
+  if (creal(cmx) == 0) {
+    printf(CLR_PRIM "false");
+  } else if (creal(cmx) == 1) {
+    printf(CLR_PRIM "true");
+  } else if (creal(cmx) != 0) {
+    printf(CLR_PRIM "%lf", creal(cmx));
+  }
+}
+
 void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
                    Node_Index node, Node_Index depth, Node_Index depth_max) {
   Node_Index len = 1;
@@ -395,6 +405,9 @@ void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
         goto while2_final;
       case NT_PRIM_CMX:
         nd_tree_print_cmx(nodes[node].as.pm.c, nodes[node].rel_err);
+        goto while2_final;
+      case NT_PRIM_PRB:
+        nd_tree_print_prb(nodes[node].as.pm.c);
         goto while2_final;
       case NT_BIOP_LET:
       case NT_BIOP_GRE:
@@ -803,7 +816,7 @@ IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrh
     return IR_ERR_ILL_NT;
   }
 
-  return st_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = 0});
+  return st_add(ir->st, (Node){.type = NT_PRIM_PRB, .as.pm.c = rt, .rel_err = 0});
 }
 
 IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrhs) {
@@ -940,16 +953,16 @@ IR_ERR ir_exec(Interpreter *ir) {
 
       head_mark = pr_nodes_ptr;
 
-      TRY(IR_ERR, ir_assert_type(NT_PRIM_CMX, rhs.type));
-
       lhs = ir->pr->nodes[pr_nodes_ptr];
 
       if (lhs.type == NT_PRIM_SYM && !MAP_GET(ir->gscope, ir->gscope_cap, lhs.as.pm.s, &lhs))
         return IR_ERR_NOT_DEFINED_SYMBOL;
 
+      TRY(IR_ERR, ir_assert_type(NT_PRIM_CMX, lhs.type));
+
       while (pr_nodes_ptr > tail_mark && pr_nodes_ptr <= head_mark) {
-				--pr_nodes_ptr;
-				
+        --pr_nodes_ptr;
+
         switch (ir->pr->nodes[pr_nodes_ptr].type) {
         case NT_UNOP_NOP: break;
         case NT_UNOP_NOT: lhs.as.pm.c = subfac_cmx(lhs.as.pm.c); break;
