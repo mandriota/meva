@@ -417,6 +417,13 @@ typedef union {
 
 //=:runtime:operators
 
+#define SWAP(X, Y, T) \
+  {                   \
+    T = X;            \
+    X = Y;            \
+    Y = T;            \
+  }
+
 double contains_interval(double a, double a_re, double b, double b_re) {
   double al = (1 - a_re) * a, ah = (1 + a_re) * a;
   double bl = (1 - b_re) * b, bh = (1 + b_re) * b;
@@ -427,10 +434,21 @@ double contains_interval(double a, double a_re, double b, double b_re) {
   if (ah < bl || bl > ah || bh < al || al > bh)
     return 0;
 
-  if (ah > bh)
-    return (bh - al) / (ah - bl);
+  double as = ah - al;
+  double bs = bh - bl;
 
-  return (ah - bl) / (bh - al);
+  double intersection = ah > bh ? bh - al : ah - bl;
+
+  if (as < bs)
+    return intersection / as;
+
+  return intersection / bs;
+
+  // TODO: Ddystopia warns about 1/3 1/2
+  /* if (ah > bh) */
+  /*   return (bh - al) / (ah - bl); */
+
+  /* return (ah - bl) / (bh - al); */
 }
 
 cmx_t fac_cmx_helper(cmx_t i, uint64_t step) {

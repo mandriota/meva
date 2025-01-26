@@ -204,7 +204,8 @@ void lx_next_token_number(Lexer *lx) {
       return;
     lx->pm.c += (double)decimal / pow(10, decimal_log10);
 
-    lx->rel_err += (float)((nextafter(creal(lx->pm.c), INFINITY) - creal(lx->pm.c)) / creal(lx->pm.c));
+    if (decimal != 0)
+      lx->rel_err += (float)((nextafter(creal(lx->pm.c), INFINITY) - creal(lx->pm.c)) / creal(lx->pm.c));
   }
 
   DBG_PRINT("rel_err: %e\n", lx->rel_err);
@@ -321,8 +322,6 @@ void lx_next_token(Lexer *lx) {
 
 typedef uint32_t Node_Index;
 
-typedef struct Node Node; // IWYU pragma: keep
-
 typedef struct {
   Node_Index nhs;
 } Un_Op;
@@ -331,7 +330,7 @@ typedef struct {
   Node_Index lhs, rhs;
 } Bi_Op;
 
-struct Node {
+typedef struct Node {
   Node_Type type : 16;
   float rel_err;
 
@@ -340,7 +339,7 @@ struct Node {
     Un_Op up;
     Bi_Op bp;
   } as;
-};
+} Node;
 
 typedef struct {
   Node_Index node;
@@ -377,7 +376,7 @@ void nd_tree_print_prb(cmx_t cmx) {
     printf(CLR_PRIM "%lf", creal(cmx));
   }
 
-	printf("\n" CLR_RESET);
+  printf("\n" CLR_RESET);
 }
 
 void nd_tree_print(Stack_Emu_El_nd_tree_print stack_emu[], Node nodes[static 1],
@@ -532,11 +531,19 @@ const char *pr_err_stringify(PR_ERR pr_err) {
 //=:parser:parser
 
 typedef struct {
+  Node_Index lower;
+  Node_Index upper;
+} Node_Bound;
+
+typedef struct {
   Lexer lx;
 
   ssize_t p0c;
   bool abs;
 
+  Node_Bound *nodes_obj;
+  Node_Index nodes_obj_len;
+  Node_Index nodes_obj_cap;
   Node_Index nodes_len;
   Node_Index nodes_cap;
   Node nodes[];
@@ -548,6 +555,15 @@ PR_ERR pr_nd_alloc(Parser *pr, Node_Index ptr[static 1]) {
 
   ptr[0] = pr->nodes_len;
   ++pr->nodes_len;
+  return PR_ERR_NOERROR;
+}
+
+PR_ERR pr_nd_obj_bound_add(Parser *pr, Node_Index l, Node_Index u) {
+  if (pr->nodes_obj_len + 1 >= pr->nodes_obj_cap)
+    return PR_ERR_MEMORY_NOT_ENOUGH;
+
+  pr->nodes_obj[pr->nodes_obj_len] = (Node_Bound){l, u};
+  ++pr->nodes_obj_len;
   return PR_ERR_NOERROR;
 }
 
@@ -602,6 +618,8 @@ PR_ERR pr_next_unop_node(Parser *pr, Node_Index *node, Priority pt) {
 }
 
 PR_ERR pr_next_biop_node(Parser *pr, Node_Index *lhs, Priority pt) {
+  Node_Index bound_low = pr->nodes_len - 1;
+
   TRY(PR_ERR, pr_call(pr, lhs, pt));
 
   Node_Index op, rhs;
@@ -619,6 +637,9 @@ PR_ERR pr_next_biop_node(Parser *pr, Node_Index *lhs, Priority pt) {
     pr->nodes[op].type = tt_to_biop_nd(op_tt);
     pr->nodes[op].as.bp.lhs = *lhs;
     pr->nodes[op].as.bp.rhs = rhs;
+
+    if (pr->nodes[op].type == TT_SPZ)
+      pr_nd_obj_bound_add(pr, bound_low, pr->nodes_len);
 
     *lhs = op;
   }
@@ -741,9 +762,9 @@ typedef struct {
   Node_Index cap;
   Node_Index len;
   Node data[];
-} Stack;
+} Stack_Node;
 
-IR_ERR st_add(Stack *st, Node nd) {
+IR_ERR st_nd_add(Stack_Node *st, Node nd) {
   if (st->len >= st->cap)
     return IR_ERR_STACK_OVERFLOW;
 
@@ -753,7 +774,7 @@ IR_ERR st_add(Stack *st, Node nd) {
   return IR_ERR_NOERROR;
 }
 
-IR_ERR st_pop(Stack *st, Node *nd) {
+IR_ERR st_nd_pop(Stack_Node *st, Node *nd) {
   if (st->len == 0)
     return IR_ERR_STACK_UNDERFLOW;
 
@@ -765,7 +786,7 @@ IR_ERR st_pop(Stack *st, Node *nd) {
 
 typedef struct {
   Parser *pr;
-  Stack *st;
+  Stack_Node *st;
 
   Map_Entry *gscope;
   size_t gscope_len;
@@ -780,7 +801,7 @@ IR_ERR ir_assert_type(Node_Type expected, Node_Type actual) {
 }
 
 IR_ERR ir_st_pop_value(Interpreter *ir, Node *nd) {
-  TRY(IR_ERR, st_pop(ir->st, nd));
+  TRY(IR_ERR, st_nd_pop(ir->st, nd));
 
   if (nd->type == NT_PRIM_SYM && !MAP_GET(ir->gscope, ir->gscope_cap, nd->as.pm.s, nd))
     return IR_ERR_NOT_DEFINED_SYMBOL;
@@ -818,7 +839,7 @@ IR_ERR ir_biop_exec_test_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrh
     return IR_ERR_ILL_NT;
   }
 
-  return st_add(ir->st, (Node){.type = NT_PRIM_PRB, .as.pm.c = rt, .rel_err = 0});
+  return st_nd_add(ir->st, (Node){.type = NT_PRIM_PRB, .as.pm.c = rt, .rel_err = 0});
 }
 
 IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrhs) {
@@ -834,23 +855,23 @@ IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrhs) {
   switch (op) {
   case NT_BIOP_ADD:
     rt = lhs + rhs;
-    rt_re = (fabs(lhs_re * lhs) + fabs(rhs_re * rhs)) / fabs(rt);
+    rt_re = sqrt(pow(lhs_re * lhs, 2) + pow(rhs_re * rhs, 2)) / fabs(rt);
     break;
   case NT_BIOP_SUB:
     rt = lhs - rhs;
-    rt_re = (fabs(lhs_re * lhs) + fabs(rhs_re * rhs)) / fabs(rt);
+    rt_re = sqrt(pow(lhs_re * lhs, 2) + pow(rhs_re * rhs, 2)) / fabs(rt);
     break;
   case NT_BIOP_APX:
     rt = lhs;
-    rt_re = fabs(rhs);
+    rt_re = rhs / lhs;
     break;
   case NT_BIOP_MUL:
     rt = lhs * rhs;
-    rt_re = lhs_re + rhs_re;
+    rt_re = sqrt(pow(lhs_re, 2) + pow(rhs_re, 2));
     break;
   case NT_BIOP_POW:
     rt = pow(lhs, rhs);
-    rt_re = fabs(rhs * lhs_re + log(lhs) * rhs_re);
+    rt_re = sqrt(pow(rhs * lhs_re, 2) + pow(log(lhs) * rhs_re, 2));
     break;
   case NT_BIOP_FAC:
     rt = fac_cmx(lhs, rhs);
@@ -861,7 +882,7 @@ IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrhs) {
       return IR_ERR_DIV_BY_ZERO;
 
     rt = lhs / rhs;
-    rt_re = lhs_re + rhs_re;
+    rt_re = sqrt(pow(lhs_re, 2) + pow(rhs_re, 2));
     break;
   case NT_BIOP_MOD:
     if (cimag(lhs) != 0 || cimag(rhs) != 0)
@@ -874,29 +895,31 @@ IR_ERR ir_biop_exec_ncmx(Interpreter *ir, Node_Type op, Node nlhs, Node nrhs) {
     return ir_biop_exec_test_ncmx(ir, op, nlhs, nrhs);
   }
 
-  return st_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = rt_re});
+  return st_nd_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = rt_re});
 }
 
-#define BUILTIN_CONST_PI (2282)
-#define BUILTIN_CONST_E (31)
-#define BUILTIN_SQRT (12241645)
-#define BUILTIN_CEIL (10106845)
-#define BUILTIN_ROUND (513997420)
-#define BUILTIN_FLOOR (749115808)
-#define BUILTIN_LN (2598)
-#define BUILTIN_EXP (175263)
-#define BUILTIN_COS (186973)
-#define BUILTIN_SIN (166125)
-#define BUILTIN_TAN (165614)
-#define BUILTIN_COSH (9099869)
-#define BUILTIN_SINH (9079021)
-#define BUILTIN_TANH (9078510)
-#define BUILTIN_ACOS (11966299)
-#define BUILTIN_ASIN (10632027)
-#define BUILTIN_ATAN (10599323)
-#define BUILTIN_ACOSH (582391643)
-#define BUILTIN_ASINH (581057371)
-#define BUILTIN_ATANH (581024667)
+enum {
+  BUILTIN_CONST_PI = 2282,
+  BUILTIN_CONST_E = 31,
+  BUILTIN_SQRT = 12241645,
+  BUILTIN_CEIL = 10106845,
+  BUILTIN_ROUND = 513997420,
+  BUILTIN_FLOOR = 749115808,
+  BUILTIN_LN = 2598,
+  BUILTIN_EXP = 175263,
+  BUILTIN_COS = 186973,
+  BUILTIN_SIN = 166125,
+  BUILTIN_TAN = 165614,
+  BUILTIN_COSH = 9099869,
+  BUILTIN_SINH = 9079021,
+  BUILTIN_TANH = 9078510,
+  BUILTIN_ACOS = 11966299,
+  BUILTIN_ASIN = 10632027,
+  BUILTIN_ATAN = 10599323,
+  BUILTIN_ACOSH = 582391643,
+  BUILTIN_ASINH = 581057371,
+  BUILTIN_ATANH = 581024667,
+};
 
 IR_ERR ir_call_exec_builtin_cmx(Interpreter *ir, sym_t fn, cmx_t arg) {
   cmx_t rt;
@@ -924,7 +947,7 @@ IR_ERR ir_call_exec_builtin_cmx(Interpreter *ir, sym_t fn, cmx_t arg) {
     return IR_ERR_NOT_DEFINED_SYMBOL;
   }
 
-  return st_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = 0});
+  return st_nd_add(ir->st, (Node){.type = NT_PRIM_CMX, .as.pm.c = rt, .rel_err = 0});
 }
 
 IR_ERR ir_exec(Interpreter *ir) {
@@ -939,7 +962,7 @@ IR_ERR ir_exec(Interpreter *ir) {
     switch (current.type) {
     case NT_PRIM_SYM:
     case NT_PRIM_CMX:
-      TRY(IR_ERR, st_add(ir->st, current));
+      TRY(IR_ERR, st_nd_add(ir->st, current));
       break;
     case NT_UNOP_NOT:
     case NT_UNOP_NEG:
@@ -976,11 +999,11 @@ IR_ERR ir_exec(Interpreter *ir) {
       }
 
       pr_nodes_ptr = head_mark;
-      st_add(ir->st, lhs);
+      st_nd_add(ir->st, lhs);
       break;
     case NT_CALL:
       TRY(IR_ERR, ir_st_pop_value(ir, &rhs));
-      TRY(IR_ERR, st_pop(ir->st, &lhs));
+      TRY(IR_ERR, st_nd_pop(ir->st, &lhs));
 
       TRY(IR_ERR, ir_assert_type(NT_PRIM_SYM, lhs.type));
       TRY(IR_ERR, ir_assert_type(NT_PRIM_CMX, rhs.type));
@@ -989,7 +1012,7 @@ IR_ERR ir_exec(Interpreter *ir) {
       break;
     case NT_BIOP_LET:
       TRY(IR_ERR, ir_st_pop_value(ir, &rhs));
-      TRY(IR_ERR, st_pop(ir->st, &lhs));
+      TRY(IR_ERR, st_nd_pop(ir->st, &lhs));
 
       TRY(IR_ERR, ir_assert_type(NT_PRIM_SYM, lhs.type));
 
@@ -1030,7 +1053,7 @@ IR_ERR ir_exec(Interpreter *ir) {
 
   if (ir->st->len) {
     TRY(IR_ERR, ir_st_pop_value(ir, &current));
-    TRY(IR_ERR, st_add(ir->st, current));
+    TRY(IR_ERR, st_nd_add(ir->st, current));
   }
 
   return IR_ERR_NOERROR;
@@ -1134,7 +1157,7 @@ _Noreturn void repl(Interpreter *ir) {
 int main(int argc, char *argv[]) {
   Interpreter ir;
 
-  ir.st = malloc(sizeof(Stack) + NODE_BUF_SIZE * sizeof(Node));
+  ir.st = malloc(sizeof(Stack_Node) + NODE_BUF_SIZE * sizeof(Node));
   assert(ir.st != NULL && "allocation failed");
 
   ir.st->cap = NODE_BUF_SIZE;
